@@ -56,7 +56,7 @@ const App = (() => {
             filename: 'deploy_' + (state.flowOrder.length + 1),
             server: state.currentServer,
             enabled: 1,
-            runat: '',
+            runat: '18:00',
             email: '',
             blackout: '',
             sms: '',
@@ -1140,6 +1140,7 @@ const App = (() => {
             opt.textContent = t;
             select.appendChild(opt);
         });
+        select.value = '18:00';
     }
 
     function updateExternaBuildCount() {
