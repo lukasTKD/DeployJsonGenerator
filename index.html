@@ -10,8 +10,16 @@
     <header class="header">
         <div class="header-content">
             <div class="header-left">
-                <h1 class="header-title">Deploy JSON Generator</h1>
-                <span class="header-subtitle">Visual Deploy Flow Editor</span>
+                <img src="images/logo.jpg" alt="Logo" class="logo">
+                <h1 class="header-title">
+                    <svg class="json-icon" viewBox="0 0 56 32" width="38" height="22" aria-hidden="true">
+                        <path class="json-file" d="M6 2h26l8 8v20H6z" fill="none" stroke="#E60000" stroke-width="2"/>
+                        <path class="json-fold" d="M32 2v8h8" fill="none" stroke="#E60000" stroke-width="2"/>
+                        <text class="json-braces" x="13" y="18">{ }</text>
+                        <text class="json-label" x="13" y="26">JSON</text>
+                    </svg>
+                    Deploy JSON Generator
+                </h1>
             </div>
             <div class="header-center">
                 <div class="mode-tabs">
@@ -31,7 +39,7 @@
         <!-- Server Tabs -->
         <div class="server-tabs-container">
             <div class="tabs-wrapper">
-                <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity</button>
+                <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity.mbank.pl</button>
                 <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
             </div>
         </div>
@@ -178,7 +186,7 @@
                         <div class="form-group">
                             <label>Serwer TeamCity</label>
                             <select id="externaServer">
-                                <option value="haaTeamCity">haaTeamCity (https://haateamcity.mbank.pl)</option>
+                                <option value="haaTeamCity">haaTeamCity.mbank.pl (https://haateamcity.mbank.pl)</option>
                                 <option value="teamcity">TeamCity.mbank.pl (https://teamcity.mbank.pl)</option>
                             </select>
                         </div>
@@ -296,7 +304,10 @@
     </div>
 
     <footer class="footer">
-        <span>&copy; 2026 DEI-ZUK-C | Ł.Peryt | Deploy JSON Generator</span>
+        <div class="footer-container">
+            <img src="images/logo.jpg" alt="Logo" class="logo">
+            <span class="footer-text">(c) 2026 DEI-ZUK-C | Ł.Peryt</span>
+        </div>
     </footer>
 
     <script src="app.js"></script>
