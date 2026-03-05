@@ -644,8 +644,7 @@ body {
 }
 
 .json-preview {
-    position: sticky;
-    top: 15px;
+    position: static;
 }
 
 .preview-header {
