@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deploy JSON Generator</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="header-title">Deploy JSON Generator</h1>
+                <span class="header-subtitle">Visual Deploy Flow Editor</span>
+            </div>
+            <div class="header-right">
+                <span class="header-info" id="flowCount">Flows: 0</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Server Tabs -->
+        <div class="server-tabs-container">
+            <div class="tabs-wrapper">
+                <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity</button>
+                <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
+            </div>
+        </div>
+
+        <!-- Flow Tabs -->
+        <div class="flow-tabs-container">
+            <div class="flow-tabs-wrapper" id="flowTabs">
+                <!-- Flow tabs will be generated dynamically -->
+            </div>
+            <button class="btn-add-flow" id="btnAddFlow" onclick="App.addFlow()" title="Dodaj nowy flow">+</button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Flow Settings + Canvas -->
+            <div class="left-panel">
+                <!-- Flow Settings -->
+                <div class="flow-settings card" id="flowSettings">
+                    <h3 class="section-title">Ustawienia Flow</h3>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Nazwa pliku JSON</label>
+                            <input type="text" id="flowFilename" placeholder="deploy_config" onchange="App.updateFlowSetting('filename', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>runat</label>
+                            <input type="text" id="flowRunat" placeholder="" onchange="App.updateFlowSetting('runat', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>waitfor</label>
+                            <input type="text" id="flowWaitfor" placeholder="Opcjonalne" onchange="App.updateFlowSetting('waitfor', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>email</label>
+                            <input type="text" id="flowEmail" placeholder="Opcjonalne" onchange="App.updateFlowSetting('email', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>blackout</label>
+                            <input type="text" id="flowBlackout" placeholder="Opcjonalne" onchange="App.updateFlowSetting('blackout', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>sms</label>
+                            <input type="text" id="flowSms" placeholder="Opcjonalne" onchange="App.updateFlowSetting('sms', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>change</label>
+                            <input type="text" id="flowChange" placeholder="Opcjonalne" onchange="App.updateFlowSetting('change', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>enabled</label>
+                            <select id="flowEnabled" onchange="App.updateFlowSetting('enabled', parseInt(this.value))">
+                                <option value="1">1 (Tak)</option>
+                                <option value="0">0 (Nie)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Diagram Canvas -->
+                <div class="canvas-container card">
+                    <div class="canvas-toolbar">
+                        <h3 class="section-title">Diagram Flow</h3>
+                        <div class="toolbar-actions">
+                            <button class="btn btn-primary" onclick="App.addNode()">+ Dodaj Build</button>
+                            <button class="btn btn-secondary" onclick="App.autoLayout()">Auto Layout</button>
+                            <button class="btn btn-danger" onclick="App.clearCanvas()">Wyczyść</button>
+                        </div>
+                    </div>
+                    <div class="canvas-info">
+                        <span>Przeciągnij z <span class="connector-hint">●</span> na inny node aby utworzyć zależność (waitfor)</span>
+                    </div>
+                    <div class="canvas" id="canvas">
+                        <svg class="connections-svg" id="connectionsSvg"></svg>
+                        <!-- Nodes will be placed here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Inter-flow Dependencies -->
+                <div class="interflow-container card">
+                    <h3 class="section-title">Zależności między plikami JSON</h3>
+                    <div class="interflow-info">
+                        <span>Ustaw kolejność wykonywania plików JSON (waitfor na poziomie pliku)</span>
+                    </div>
+                    <div class="interflow-list" id="interflowList">
+                        <!-- Generated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - JSON Preview -->
+            <div class="right-panel">
+                <div class="json-preview card">
+                    <div class="preview-header">
+                        <h3 class="section-title">Podgląd JSON</h3>
+                        <div class="preview-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="App.copyJson()">Kopiuj</button>
+                            <button class="btn btn-primary btn-sm" onclick="App.downloadCurrentJson()">Pobierz</button>
+                        </div>
+                    </div>
+                    <pre class="json-output" id="jsonPreview">{ }</pre>
+                </div>
+
+                <div class="json-all-preview card">
+                    <div class="preview-header">
+                        <h3 class="section-title">Wszystkie pliki JSON</h3>
+                        <div class="preview-actions">
+                            <button class="btn btn-primary" onclick="App.downloadAllJson()">Pobierz wszystkie</button>
+                        </div>
+                    </div>
+                    <div class="all-files-list" id="allFilesList">
+                        <!-- Generated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Node Edit Modal -->
+    <div class="modal-overlay" id="nodeEditModal" style="display:none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Edytuj Build</h3>
+                <button class="modal-close" onclick="App.closeNodeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nazwa (klucz w bilds)</label>
+                    <input type="text" id="nodeEditName" placeholder="np. zadanie1">
+                </div>
+                <div class="form-group">
+                    <label>buildid</label>
+                    <input type="text" id="nodeEditBuildId" placeholder="NAZWA_BUILDA">
+                </div>
+                <div class="form-group">
+                    <label>enabled</label>
+                    <select id="nodeEditEnabled">
+                        <option value="1">1 (Tak)</option>
+                        <option value="0">0 (Nie)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>waitfor (automatycznie z połączeń)</label>
+                    <input type="text" id="nodeEditWaitfor" placeholder="Ustawiane przez strzałki" readonly>
+                </div>
+                <div class="form-group">
+                    <label>retry</label>
+                    <input type="text" id="nodeEditRetry" placeholder="Opcjonalne">
+                </div>
+                <div class="form-group">
+                    <label>external</label>
+                    <input type="text" id="nodeEditExternal" placeholder="Opcjonalne">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="App.deleteNode()">Usuń Build</button>
+                <button class="btn btn-primary" onclick="App.saveNodeEdit()">Zapisz</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <span>&copy; 2026 DEI-ZUK-C | Ł.Peryt | Deploy JSON Generator</span>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
