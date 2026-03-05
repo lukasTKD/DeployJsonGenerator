@@ -50,11 +50,13 @@
                         </div>
                         <div class="form-group">
                             <label>runat</label>
-                            <input type="text" id="flowRunat" placeholder="" onchange="App.updateFlowSetting('runat', this.value)">
+                            <select id="flowRunat" onchange="App.updateFlowSetting('runat', this.value)">
+                                <option value="">-- brak --</option>
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label>waitfor</label>
-                            <input type="text" id="flowWaitfor" placeholder="Opcjonalne" onchange="App.updateFlowSetting('waitfor', this.value)">
+                            <label>waitfor (pliki JSON)</label>
+                            <input type="text" id="flowWaitfor" placeholder="Ustawiane w sekcji zależności" readonly>
                         </div>
                         <div class="form-group">
                             <label>email</label>
@@ -150,7 +152,7 @@
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label>Nazwa (klucz w bilds)</label>
+                    <label>Nazwa (klucz w builds)</label>
                     <input type="text" id="nodeEditName" placeholder="np. zadanie1">
                 </div>
                 <div class="form-group">

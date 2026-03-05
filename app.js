@@ -16,11 +16,36 @@ const App = (() => {
         flows: {},
         flowOrder: [],
         nodeCounter: 0,
-        // Drag state
+        editingNodeId: null,
         dragging: null,
-        connecting: null,
-        tempLine: null
+        connecting: null
     };
+
+    // ========== TIME OPTIONS (runat) ==========
+
+    function generateTimeOptions() {
+        const options = [];
+        for (let h = 0; h < 24; h++) {
+            for (let m = 0; m < 60; m += 5) {
+                const hh = String(h).padStart(2, '0');
+                const mm = String(m).padStart(2, '0');
+                options.push(`${hh}:${mm}`);
+            }
+        }
+        return options;
+    }
+
+    function populateRunatSelect() {
+        const select = document.getElementById('flowRunat');
+        if (select.options.length > 1) return; // already populated
+        const times = generateTimeOptions();
+        times.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            select.appendChild(opt);
+        });
+    }
 
     // ========== FLOW MANAGEMENT ==========
 
@@ -32,14 +57,13 @@ const App = (() => {
             server: state.currentServer,
             enabled: 1,
             runat: '',
-            waitfor: '',
             email: '',
             blackout: '',
             sms: '',
             change: '',
             nodes: {},
             connections: [],
-            interflowWaitfor: ''
+            interflowWaitfor: [] // ARRAY - multiple dependencies
         };
         state.flowOrder.push(id);
         state.currentFlowId = id;
@@ -62,7 +86,9 @@ const App = (() => {
         state.flowOrder = state.flowOrder.filter(id => id !== flowId);
         // Clean up interflow references
         Object.values(state.flows).forEach(f => {
-            if (f.interflowWaitfor === flowId) f.interflowWaitfor = '';
+            if (Array.isArray(f.interflowWaitfor)) {
+                f.interflowWaitfor = f.interflowWaitfor.filter(wid => wid !== flowId);
+            }
         });
         if (state.currentFlowId === flowId) {
             state.currentFlowId = state.flowOrder[0];
@@ -87,11 +113,11 @@ const App = (() => {
         document.querySelectorAll('.server-tabs-container .tab').forEach(t => {
             t.classList.toggle('active', t.dataset.server === server);
         });
-        // Filter flows for current server or show all
         renderFlowTabs();
         renderCurrentFlow();
         updateJsonPreview();
         renderAllFilesList();
+        renderInterflowDeps();
     }
 
     function getCurrentFlow() {
@@ -101,7 +127,7 @@ const App = (() => {
     function getServerFlows() {
         return state.flowOrder
             .map(id => state.flows[id])
-            .filter(f => f.server === state.currentServer);
+            .filter(f => f && f.server === state.currentServer);
     }
 
     // ========== FLOW SETTINGS ==========
@@ -110,23 +136,53 @@ const App = (() => {
         const flow = getCurrentFlow();
         if (!flow) return;
         flow[key] = value;
-        if (key === 'filename') renderFlowTabs();
+        if (key === 'filename') {
+            renderFlowTabs();
+            renderInterflowDeps();
+        }
         updateJsonPreview();
         renderAllFilesList();
-        if (key === 'filename') renderInterflowDeps();
     }
 
     function loadFlowSettings() {
         const flow = getCurrentFlow();
         if (!flow) return;
+        populateRunatSelect();
         document.getElementById('flowFilename').value = flow.filename || '';
         document.getElementById('flowRunat').value = flow.runat || '';
-        document.getElementById('flowWaitfor').value = flow.waitfor || '';
+        // waitfor is derived from interflowWaitfor - show as comma-separated filenames
+        const waitforNames = getInterflowWaitforNames(flow);
+        document.getElementById('flowWaitfor').value = waitforNames.join(', ') || '';
         document.getElementById('flowEmail').value = flow.email || '';
         document.getElementById('flowBlackout').value = flow.blackout || '';
         document.getElementById('flowSms').value = flow.sms || '';
         document.getElementById('flowChange').value = flow.change || '';
         document.getElementById('flowEnabled').value = flow.enabled;
+    }
+
+    function getInterflowWaitforNames(flow) {
+        if (!Array.isArray(flow.interflowWaitfor)) return [];
+        return flow.interflowWaitfor
+            .map(fid => state.flows[fid])
+            .filter(f => f)
+            .map(f => f.filename);
+    }
+
+    // ========== VALIDATORS ==========
+
+    function validateNodeName(flow, name, excludeNodeId) {
+        const duplicate = Object.values(flow.nodes).find(
+            n => n.name === name && n.id !== excludeNodeId
+        );
+        return duplicate ? `Nazwa "${name}" już istnieje w tym flow` : null;
+    }
+
+    function validateBuildId(flow, buildid, excludeNodeId) {
+        if (!buildid) return null; // empty is allowed (placeholder used)
+        const duplicate = Object.values(flow.nodes).find(
+            n => n.buildid === buildid && n.id !== excludeNodeId
+        );
+        return duplicate ? `buildid "${buildid}" jest już używane przez "${duplicate.name}"` : null;
     }
 
     // ========== NODE MANAGEMENT ==========
@@ -136,12 +192,11 @@ const App = (() => {
         if (!flow) return;
         state.nodeCounter++;
         const nodeId = 'node_' + state.nodeCounter;
-        const canvas = document.getElementById('canvas');
-        const rect = canvas.getBoundingClientRect();
-        // Place node at a random-ish position
+        // Vertical layout: stack nodes top-to-bottom
         const existingCount = Object.keys(flow.nodes).length;
-        const col = existingCount % 3;
-        const row = Math.floor(existingCount / 3);
+        const canvas = document.getElementById('canvas');
+        const canvasW = canvas.offsetWidth || 600;
+        const nodeW = 180;
         flow.nodes[nodeId] = {
             id: nodeId,
             name: 'Build_' + state.nodeCounter,
@@ -150,23 +205,24 @@ const App = (() => {
             waitfor: '',
             retry: '',
             external: '',
-            x: 30 + col * 200,
-            y: 30 + row * 120
+            x: Math.max(30, (canvasW - nodeW) / 2), // centered
+            y: 30 + existingCount * 110
         };
         renderCanvas();
         updateJsonPreview();
+        expandCanvasIfNeeded();
     }
 
     function deleteNode() {
         const flow = getCurrentFlow();
         if (!flow || !state.editingNodeId) return;
         const nodeId = state.editingNodeId;
+        const deletedName = flow.nodes[nodeId].name;
         // Remove connections involving this node
         flow.connections = flow.connections.filter(
             c => c.from !== nodeId && c.to !== nodeId
         );
         // Update waitfor references
-        const deletedName = flow.nodes[nodeId].name;
         Object.values(flow.nodes).forEach(n => {
             if (n.waitfor === deletedName) n.waitfor = '';
         });
@@ -181,19 +237,16 @@ const App = (() => {
     function renderCanvas() {
         const flow = getCurrentFlow();
         const canvas = document.getElementById('canvas');
-        const svg = document.getElementById('connectionsSvg');
         if (!flow) {
             canvas.innerHTML = '<svg class="connections-svg" id="connectionsSvg"></svg>';
             return;
         }
         // Clear nodes (keep SVG)
-        const existingNodes = canvas.querySelectorAll('.node');
-        existingNodes.forEach(n => n.remove());
+        canvas.querySelectorAll('.node').forEach(n => n.remove());
 
         // Render nodes
         Object.values(flow.nodes).forEach(node => {
-            const el = createNodeElement(node);
-            canvas.appendChild(el);
+            canvas.appendChild(createNodeElement(node));
         });
 
         // Render connections
@@ -211,6 +264,7 @@ const App = (() => {
         const statusText = node.enabled ? 'enabled: 1' : 'enabled: 0';
 
         div.innerHTML = `
+            <div class="connector in" title="Wejście (drop target)"></div>
             <div class="node-header">
                 <span class="node-name">${escapeHtml(node.name)}</span>
                 <button class="node-edit-btn" onclick="App.openNodeModal('${node.id}')" title="Edytuj">&#9998;</button>
@@ -222,18 +276,17 @@ const App = (() => {
                     ${node.waitfor ? ' | waitfor: ' + escapeHtml(node.waitfor) : ''}
                 </div>
             </div>
-            <div class="connector out" title="Przeciągnij aby połączyć"></div>
-            <div class="connector in"></div>
+            <div class="connector out" title="Przeciągnij w dół aby połączyć"></div>
         `;
 
-        // Node dragging
+        // Node dragging from header
         const header = div.querySelector('.node-header');
         header.addEventListener('mousedown', (e) => {
             if (e.target.classList.contains('node-edit-btn')) return;
             startDrag(e, node, div);
         });
 
-        // Connector drag (for creating connections)
+        // Connector drag (for creating connections) - from bottom connector
         const connOut = div.querySelector('.connector.out');
         connOut.addEventListener('mousedown', (e) => {
             e.stopPropagation();
@@ -267,18 +320,20 @@ const App = (() => {
             const toEl = document.querySelector(`[data-node-id="${conn.to}"]`);
             if (!fromEl || !toEl) return;
 
-            const fromRect = { w: fromEl.offsetWidth, h: fromEl.offsetHeight };
-            const toRect = { w: toEl.offsetWidth, h: toEl.offsetHeight };
+            const fromW = fromEl.offsetWidth;
+            const fromH = fromEl.offsetHeight;
+            const toW = toEl.offsetWidth;
 
-            const x1 = fromNode.x + fromRect.w;
-            const y1 = fromNode.y + fromRect.h / 2;
-            const x2 = toNode.x;
-            const y2 = toNode.y + toRect.h / 2;
+            // Vertical: from bottom-center of source to top-center of target
+            const x1 = fromNode.x + fromW / 2;
+            const y1 = fromNode.y + fromH;
+            const x2 = toNode.x + toW / 2;
+            const y2 = toNode.y;
 
-            // Curved path
-            const midX = (x1 + x2) / 2;
+            // Curved path (vertical)
+            const midY = (y1 + y2) / 2;
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', `M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`);
+            path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
             path.setAttribute('class', 'connection-line');
             path.setAttribute('marker-end', 'url(#arrowhead)');
             path.addEventListener('dblclick', () => removeConnection(idx));
@@ -298,13 +353,10 @@ const App = (() => {
             `;
             delGroup.style.pointerEvents = 'all';
             delGroup.addEventListener('click', () => removeConnection(idx));
-
-            // Show on hover over the path area
             path.addEventListener('mouseenter', () => { delGroup.style.opacity = '1'; });
             path.addEventListener('mouseleave', () => { delGroup.style.opacity = '0'; });
             delGroup.addEventListener('mouseenter', () => { delGroup.style.opacity = '1'; });
             delGroup.addEventListener('mouseleave', () => { delGroup.style.opacity = '0'; });
-
             svg.appendChild(delGroup);
         });
     }
@@ -334,21 +386,17 @@ const App = (() => {
         const offsetX = e.clientX - canvasRect.left - node.x;
         const offsetY = e.clientY - canvasRect.top - node.y;
         el.classList.add('dragging');
-        state.dragging = { node, el, offsetX, offsetY, canvasRect };
 
         const onMove = (ev) => {
-            const x = Math.max(0, ev.clientX - canvasRect.left - offsetX);
-            const y = Math.max(0, ev.clientY - canvasRect.top - offsetY);
-            node.x = x;
-            node.y = y;
-            el.style.left = x + 'px';
-            el.style.top = y + 'px';
+            node.x = Math.max(0, ev.clientX - canvasRect.left - offsetX);
+            node.y = Math.max(0, ev.clientY - canvasRect.top - offsetY);
+            el.style.left = node.x + 'px';
+            el.style.top = node.y + 'px';
             renderConnections();
         };
 
         const onUp = () => {
             el.classList.remove('dragging');
-            state.dragging = null;
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             expandCanvasIfNeeded();
@@ -367,10 +415,10 @@ const App = (() => {
         const flow = getCurrentFlow();
         const fromNode = flow.nodes[fromNodeId];
         const fromEl = document.querySelector(`[data-node-id="${fromNodeId}"]`);
-        const x1 = fromNode.x + fromEl.offsetWidth;
-        const y1 = fromNode.y + fromEl.offsetHeight / 2;
+        // Start from bottom-center
+        const x1 = fromNode.x + fromEl.offsetWidth / 2;
+        const y1 = fromNode.y + fromEl.offsetHeight;
 
-        // Create temp line
         const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         tempLine.setAttribute('x1', x1);
         tempLine.setAttribute('y1', y1);
@@ -378,27 +426,20 @@ const App = (() => {
         tempLine.setAttribute('y2', y1);
         tempLine.setAttribute('class', 'connection-temp');
         svg.appendChild(tempLine);
-        state.connecting = { fromNodeId, tempLine };
 
         const onMove = (ev) => {
-            const mx = ev.clientX - canvasRect.left;
-            const my = ev.clientY - canvasRect.top;
-            tempLine.setAttribute('x2', mx);
-            tempLine.setAttribute('y2', my);
+            tempLine.setAttribute('x2', ev.clientX - canvasRect.left);
+            tempLine.setAttribute('y2', ev.clientY - canvasRect.top);
         };
 
         const onUp = (ev) => {
             tempLine.remove();
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
-
-            // Find target node
             const target = ev.target.closest('.node');
             if (target && target.dataset.nodeId !== fromNodeId) {
-                const toNodeId = target.dataset.nodeId;
-                createConnection(fromNodeId, toNodeId);
+                createConnection(fromNodeId, target.dataset.nodeId);
             }
-            state.connecting = null;
         };
 
         document.addEventListener('mousemove', onMove);
@@ -408,17 +449,13 @@ const App = (() => {
     function createConnection(fromId, toId) {
         const flow = getCurrentFlow();
         if (!flow) return;
-
-        // Prevent duplicates
-        const exists = flow.connections.some(c => c.from === fromId && c.to === toId);
-        if (exists) return;
-
-        // Prevent self-connection
         if (fromId === toId) return;
 
-        // Prevent reverse duplicate (A->B and B->A creates cycle)
-        const reverse = flow.connections.some(c => c.from === toId && c.to === fromId);
-        if (reverse) {
+        // Prevent duplicates
+        if (flow.connections.some(c => c.from === fromId && c.to === toId)) return;
+
+        // Prevent reverse (cycle)
+        if (flow.connections.some(c => c.from === toId && c.to === fromId)) {
             showToast('Cykliczna zależność niedozwolona', 'error');
             return;
         }
@@ -441,9 +478,8 @@ const App = (() => {
         if (!flow) return;
         const canvas = document.getElementById('canvas');
         let maxY = 450;
-        let maxX = canvas.offsetWidth;
         Object.values(flow.nodes).forEach(n => {
-            if (n.y + 100 > maxY) maxY = n.y + 100;
+            if (n.y + 120 > maxY) maxY = n.y + 120;
         });
         canvas.style.minHeight = maxY + 'px';
     }
@@ -462,6 +498,10 @@ const App = (() => {
         document.getElementById('nodeEditWaitfor').value = node.waitfor || '';
         document.getElementById('nodeEditRetry').value = node.retry || '';
         document.getElementById('nodeEditExternal').value = node.external || '';
+
+        // Clear previous validation messages
+        clearValidation();
+
         document.getElementById('nodeEditModal').style.display = 'flex';
     }
 
@@ -476,9 +516,24 @@ const App = (() => {
         const node = flow.nodes[state.editingNodeId];
         const oldName = node.name;
         const newName = document.getElementById('nodeEditName').value.trim() || node.name;
+        const newBuildId = document.getElementById('nodeEditBuildId').value.trim();
+
+        // Validate name uniqueness
+        const nameError = validateNodeName(flow, newName, state.editingNodeId);
+        if (nameError) {
+            showValidationError('nodeEditName', nameError);
+            return;
+        }
+
+        // Validate buildid uniqueness
+        const buildIdError = validateBuildId(flow, newBuildId, state.editingNodeId);
+        if (buildIdError) {
+            showValidationError('nodeEditBuildId', buildIdError);
+            return;
+        }
 
         node.name = newName;
-        node.buildid = document.getElementById('nodeEditBuildId').value.trim();
+        node.buildid = newBuildId;
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
         node.retry = document.getElementById('nodeEditRetry').value.trim();
         node.external = document.getElementById('nodeEditExternal').value.trim();
@@ -488,14 +543,6 @@ const App = (() => {
             Object.values(flow.nodes).forEach(n => {
                 if (n.waitfor === oldName) n.waitfor = newName;
             });
-            // Update connections-based waitfor
-            flow.connections.forEach(c => {
-                const toNode = flow.nodes[c.to];
-                const fromNode = flow.nodes[c.from];
-                if (toNode && fromNode) {
-                    toNode.waitfor = fromNode.name;
-                }
-            });
         }
 
         closeNodeModal();
@@ -503,7 +550,23 @@ const App = (() => {
         updateJsonPreview();
     }
 
-    // ========== AUTO LAYOUT ==========
+    function showValidationError(inputId, message) {
+        clearValidation();
+        const input = document.getElementById(inputId);
+        input.classList.add('validation-error');
+        const msg = document.createElement('div');
+        msg.className = 'validation-msg';
+        msg.textContent = message;
+        input.parentElement.appendChild(msg);
+        showToast(message, 'error');
+    }
+
+    function clearValidation() {
+        document.querySelectorAll('.validation-error').forEach(el => el.classList.remove('validation-error'));
+        document.querySelectorAll('.validation-msg').forEach(el => el.remove());
+    }
+
+    // ========== AUTO LAYOUT (TOP-TO-BOTTOM) ==========
 
     function autoLayout() {
         const flow = getCurrentFlow();
@@ -512,14 +575,11 @@ const App = (() => {
         const nodes = Object.values(flow.nodes);
         if (nodes.length === 0) return;
 
-        // Topological sort based on connections
-        const levels = {};
-        const visited = new Set();
+        // Topological sort - level assignment
         const inDegree = {};
         nodes.forEach(n => { inDegree[n.id] = 0; });
         flow.connections.forEach(c => { inDegree[c.to] = (inDegree[c.to] || 0) + 1; });
 
-        // BFS-based level assignment
         const queue = nodes.filter(n => inDegree[n.id] === 0).map(n => n.id);
         const nodeLevel = {};
         queue.forEach(id => { nodeLevel[id] = 0; });
@@ -535,7 +595,6 @@ const App = (() => {
             });
         }
 
-        // Assign positions to unvisited nodes too
         nodes.forEach(n => {
             if (!(n.id in nodeLevel)) nodeLevel[n.id] = 0;
         });
@@ -548,16 +607,19 @@ const App = (() => {
             levelGroups[lvl].push(n);
         });
 
-        // Position
-        const startX = 40;
+        // Position: TOP-TO-BOTTOM layout
+        const canvas = document.getElementById('canvas');
+        const canvasW = canvas.offsetWidth || 700;
+        const gapY = 120; // vertical gap between levels
+        const gapX = 200; // horizontal gap between siblings
         const startY = 30;
-        const gapX = 220;
-        const gapY = 100;
 
         Object.entries(levelGroups).forEach(([level, group]) => {
+            const totalWidth = group.length * gapX;
+            const startX = Math.max(20, (canvasW - totalWidth) / 2);
             group.forEach((node, idx) => {
-                node.x = startX + parseInt(level) * gapX;
-                node.y = startY + idx * gapY;
+                node.x = startX + idx * gapX;
+                node.y = startY + parseInt(level) * gapY;
             });
         });
 
@@ -587,16 +649,22 @@ const App = (() => {
         // runat always present
         json.runat = flow.runat || '';
 
-        // Optional root-level fields - only include if set
-        if (flow.waitfor) json.waitfor = flow.waitfor;
+        // waitfor from interflow dependencies (can be multiple)
+        const waitforNames = getInterflowWaitforNames(flow);
+        if (waitforNames.length === 1) {
+            json.waitfor = waitforNames[0];
+        } else if (waitforNames.length > 1) {
+            json.waitfor = waitforNames.join(',');
+        }
+
+        // Optional root-level fields
         if (flow.email) json.email = flow.email;
         if (flow.blackout) json.blackout = flow.blackout;
         if (flow.sms) json.sms = flow.sms;
         if (flow.change) json.change = flow.change;
 
-        // Builds
-        json.bilds = {};
-        // Order nodes: no-waitfor first, then by connection chain
+        // Builds (fixed: "builds" not "bilds")
+        json.builds = {};
         const orderedNodes = getOrderedNodes(flow);
         orderedNodes.forEach(node => {
             const build = {};
@@ -605,7 +673,7 @@ const App = (() => {
             build.buildid = node.buildid || 'NAZWA_BUILDA';
             if (node.retry) build.retry = node.retry;
             if (node.external) build.external = node.external;
-            json.bilds[node.name] = build;
+            json.builds[node.name] = build;
         });
 
         return json;
@@ -615,7 +683,6 @@ const App = (() => {
         const nodes = Object.values(flow.nodes);
         if (nodes.length === 0) return [];
 
-        // Topological sort
         const inDegree = {};
         nodes.forEach(n => { inDegree[n.id] = 0; });
         flow.connections.forEach(c => {
@@ -640,7 +707,7 @@ const App = (() => {
             });
         }
 
-        // Add any remaining (disconnected) nodes
+        // Add disconnected nodes
         nodes.forEach(n => {
             if (!visited.has(n.id)) result.push(n);
         });
@@ -660,8 +727,7 @@ const App = (() => {
             return;
         }
         const json = generateJson(flow);
-        const formatted = formatJson(json);
-        preview.innerHTML = syntaxHighlight(formatted);
+        preview.innerHTML = syntaxHighlight(formatJson(json));
         renderAllFilesList();
     }
 
@@ -687,7 +753,6 @@ const App = (() => {
             `;
         }).join('');
 
-        // If current flow not in current server, switch
         if (!serverFlows.find(f => f.id === state.currentFlowId)) {
             if (serverFlows.length > 0) {
                 state.currentFlowId = serverFlows[0].id;
@@ -710,34 +775,45 @@ const App = (() => {
         }
 
         list.innerHTML = serverFlows.map(flow => {
+            // Migrate old string format to array
+            if (!Array.isArray(flow.interflowWaitfor)) {
+                flow.interflowWaitfor = flow.interflowWaitfor ? [flow.interflowWaitfor] : [];
+            }
             const otherFlows = serverFlows.filter(f => f.id !== flow.id);
-            const options = otherFlows.map(f =>
-                `<option value="${f.id}" ${flow.interflowWaitfor === f.id ? 'selected' : ''}>${escapeHtml(f.filename)}.json</option>`
-            ).join('');
+            const checkboxes = otherFlows.map(f => {
+                const checked = flow.interflowWaitfor.includes(f.id) ? 'checked' : '';
+                return `
+                    <label class="interflow-checkbox-label">
+                        <input type="checkbox" ${checked}
+                            onchange="App.toggleInterflowDep('${flow.id}', '${f.id}', this.checked)">
+                        <span>${escapeHtml(f.filename)}.json</span>
+                    </label>
+                `;
+            }).join('');
 
             return `
                 <div class="interflow-item">
                     <label>${escapeHtml(flow.filename)}.json</label>
                     <span>czeka na:</span>
-                    <select onchange="App.setInterflowDep('${flow.id}', this.value)">
-                        <option value="">-- brak --</option>
-                        ${options}
-                    </select>
+                    <div class="interflow-checkboxes">${checkboxes}</div>
                 </div>
             `;
         }).join('');
     }
 
-    function setInterflowDep(flowId, waitforFlowId) {
+    function toggleInterflowDep(flowId, waitforFlowId, checked) {
         const flow = state.flows[flowId];
         if (!flow) return;
-        flow.interflowWaitfor = waitforFlowId;
-        // Set the waitfor field to the filename of the target flow
-        if (waitforFlowId && state.flows[waitforFlowId]) {
-            flow.waitfor = state.flows[waitforFlowId].filename;
+        if (!Array.isArray(flow.interflowWaitfor)) flow.interflowWaitfor = [];
+
+        if (checked) {
+            if (!flow.interflowWaitfor.includes(waitforFlowId)) {
+                flow.interflowWaitfor.push(waitforFlowId);
+            }
         } else {
-            flow.waitfor = '';
+            flow.interflowWaitfor = flow.interflowWaitfor.filter(id => id !== waitforFlowId);
         }
+
         loadFlowSettings();
         updateJsonPreview();
     }
@@ -764,8 +840,7 @@ const App = (() => {
     }
 
     function updateFlowCount() {
-        const count = getServerFlows().length;
-        document.getElementById('flowCount').textContent = `Flows: ${count}`;
+        document.getElementById('flowCount').textContent = `Flows: ${getServerFlows().length}`;
     }
 
     // ========== DOWNLOAD ==========
@@ -773,15 +848,13 @@ const App = (() => {
     function downloadCurrentJson() {
         const flow = getCurrentFlow();
         if (!flow) return;
-        const json = generateJson(flow);
-        downloadJsonFile(flow.filename + '.json', json);
+        downloadJsonFile(flow.filename + '.json', generateJson(flow));
     }
 
     function downloadFlowJson(flowId) {
         const flow = state.flows[flowId];
         if (!flow) return;
-        const json = generateJson(flow);
-        downloadJsonFile(flow.filename + '.json', json);
+        downloadJsonFile(flow.filename + '.json', generateJson(flow));
     }
 
     function downloadAllJson() {
@@ -791,8 +864,7 @@ const App = (() => {
             return;
         }
         serverFlows.forEach(flow => {
-            const json = generateJson(flow);
-            downloadJsonFile(flow.filename + '.json', json);
+            downloadJsonFile(flow.filename + '.json', generateJson(flow));
         });
         showToast(`Pobrano ${serverFlows.length} plik(ów) JSON`, 'success');
     }
@@ -812,8 +884,7 @@ const App = (() => {
     function copyJson() {
         const flow = getCurrentFlow();
         if (!flow) return;
-        const json = generateJson(flow);
-        navigator.clipboard.writeText(formatJson(json)).then(() => {
+        navigator.clipboard.writeText(formatJson(generateJson(flow))).then(() => {
             showToast('JSON skopiowany do schowka', 'success');
         }).catch(() => {
             showToast('Nie udało się skopiować', 'error');
@@ -841,17 +912,14 @@ const App = (() => {
 
     function saveState() {
         try {
-            const data = {
+            localStorage.setItem('deployJsonGenerator', JSON.stringify({
                 currentServer: state.currentServer,
                 currentFlowId: state.currentFlowId,
                 flows: state.flows,
                 flowOrder: state.flowOrder,
                 nodeCounter: state.nodeCounter
-            };
-            localStorage.setItem('deployJsonGenerator', JSON.stringify(data));
-        } catch (e) {
-            // Ignore storage errors
-        }
+            }));
+        } catch (e) { /* ignore */ }
     }
 
     function loadState() {
@@ -863,15 +931,18 @@ const App = (() => {
                 state.flows = data.flows;
                 state.flowOrder = data.flowOrder || [];
                 state.nodeCounter = data.nodeCounter || 0;
+                // Migrate old interflowWaitfor string to array
+                Object.values(state.flows).forEach(f => {
+                    if (!Array.isArray(f.interflowWaitfor)) {
+                        f.interflowWaitfor = f.interflowWaitfor ? [f.interflowWaitfor] : [];
+                    }
+                });
                 return true;
             }
-        } catch (e) {
-            // Ignore
-        }
+        } catch (e) { /* ignore */ }
         return false;
     }
 
-    // Auto-save on changes
     function withSave(fn) {
         return function(...args) {
             const result = fn.apply(this, args);
@@ -884,14 +955,8 @@ const App = (() => {
 
     function initKeyboard() {
         document.addEventListener('keydown', (e) => {
-            // Escape closes modal
-            if (e.key === 'Escape') {
-                closeNodeModal();
-            }
-            // Delete selected node
-            if (e.key === 'Delete' && state.editingNodeId) {
-                deleteNode();
-            }
+            if (e.key === 'Escape') closeNodeModal();
+            if (e.key === 'Delete' && state.editingNodeId) deleteNode();
         });
     }
 
@@ -900,12 +965,11 @@ const App = (() => {
     function init() {
         const loaded = loadState();
         if (!loaded) {
-            // Create initial flow
             addFlow();
         } else {
-            // Render loaded state
             switchServer(state.currentServer);
         }
+        populateRunatSelect();
         renderFlowTabs();
         renderCurrentFlow();
         updateFlowCount();
@@ -913,8 +977,6 @@ const App = (() => {
         renderInterflowDeps();
         renderAllFilesList();
         initKeyboard();
-
-        // Auto-save periodically
         setInterval(saveState, 5000);
     }
 
@@ -933,7 +995,7 @@ const App = (() => {
         saveNodeEdit: withSave(saveNodeEdit),
         autoLayout: withSave(autoLayout),
         clearCanvas: withSave(clearCanvas),
-        setInterflowDep: withSave(setInterflowDep),
+        toggleInterflowDep: withSave(toggleInterflowDep),
         copyJson,
         downloadCurrentJson,
         downloadFlowJson,
@@ -941,5 +1003,4 @@ const App = (() => {
     };
 })();
 
-// Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', App.init);
