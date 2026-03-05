@@ -1021,6 +1021,25 @@ const App = (() => {
         };
     }
 
+    function setBulkDrawerOpen(isOpen) {
+        const drawer = document.getElementById('bulkDrawer');
+        const overlay = document.getElementById('bulkDrawerOverlay');
+        if (!drawer || !overlay) return;
+        drawer.classList.toggle('open', isOpen);
+        overlay.classList.toggle('open', isOpen);
+        drawer.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    }
+
+    function toggleBulkDrawer() {
+        const drawer = document.getElementById('bulkDrawer');
+        if (!drawer) return;
+        setBulkDrawerOpen(!drawer.classList.contains('open'));
+    }
+
+    function closeBulkDrawer() {
+        setBulkDrawerOpen(false);
+    }
+
     // ========== BULK PASTE BUILDS ==========
 
     function bulkAddBuilds() {
@@ -1091,6 +1110,7 @@ const App = (() => {
         renderCanvas();
         updateJsonPreview();
         expandCanvasIfNeeded();
+        closeBulkDrawer();
         showToast(`Dodano ${addedNames.length} buildów do flow`, 'success');
     }
 
@@ -1202,6 +1222,7 @@ const App = (() => {
     function initKeyboard() {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeNodeModal();
+            if (e.key === 'Escape') closeBulkDrawer();
             if (e.key === 'Delete' && state.editingNodeId) deleteNode();
         });
     }
@@ -1255,7 +1276,9 @@ const App = (() => {
         generateExterna,
         copyExternaJson,
         downloadExternaJson,
-        bulkAddBuilds: withSave(bulkAddBuilds)
+        bulkAddBuilds: withSave(bulkAddBuilds),
+        toggleBulkDrawer,
+        closeBulkDrawer
     };
 })();
 

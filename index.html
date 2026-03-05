@@ -100,20 +100,6 @@
                     </div>
                 </div>
 
-                <!-- Bulk Paste Builds -->
-                <div class="bulk-paste-container card">
-                    <div class="canvas-toolbar">
-                        <h3 class="section-title">Szybkie dodawanie buildów</h3>
-                        <div class="toolbar-actions">
-                            <button class="btn btn-primary btn-sm" onclick="App.bulkAddBuilds()">Dodaj buildy</button>
-                        </div>
-                    </div>
-                    <div class="canvas-info">
-                        <span>Wklej listę nazw buildów (każdy w nowej linii) — zostaną dodane jako nody do bieżącego flow</span>
-                    </div>
-                    <textarea id="bulkBuildList" class="externa-textarea" rows="4" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3"></textarea>
-                </div>
-
                 <!-- Diagram Canvas -->
                 <div class="canvas-container card">
                     <div class="canvas-toolbar">
@@ -173,6 +159,24 @@
         </div>
     </div>
 
+            <button class="bulk-drawer-tab" onclick="App.toggleBulkDrawer()" title="Szybkie dodawanie buildów" aria-label="Otwórz panel szybkiego dodawania buildów">
+                <span class="bulk-tab-arrow">▶</span>
+                <span class="bulk-tab-text">Szybkie buildy</span>
+            </button>
+
+            <div class="bulk-drawer-overlay" id="bulkDrawerOverlay" onclick="App.closeBulkDrawer()"></div>
+            <aside class="bulk-drawer" id="bulkDrawer" aria-hidden="true">
+                <div class="bulk-drawer-header">
+                    <h3 class="section-title">Szybkie dodawanie buildów</h3>
+                    <button class="bulk-drawer-close" onclick="App.closeBulkDrawer()" title="Zamknij">&times;</button>
+                </div>
+                <p class="bulk-drawer-desc">Wklej listę nazw buildów (jeden na linię). Buildy zostaną dodane do bieżącego flow.</p>
+                <textarea id="bulkBuildList" class="externa-textarea" rows="14" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3"></textarea>
+                <div class="bulk-drawer-actions">
+                    <button class="btn btn-primary" onclick="App.bulkAddBuilds()">Dodaj buildy</button>
+                    <button class="btn btn-secondary" onclick="App.closeBulkDrawer()">Zamknij</button>
+                </div>
+            </aside>
         </div><!-- /editorMode -->
 
         <!-- ===== EXTERNA MODE ===== -->
