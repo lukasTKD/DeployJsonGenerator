@@ -168,6 +168,57 @@ const App = (() => {
             .map(f => f.filename);
     }
 
+    // ========== TC BUILD PARAMS ==========
+
+    const TC_BUILD_PARAMS = {
+        'TC_SQL': ['sqlserver', 'database', 'file'],
+        'TC_PowerShell': ['servers', 'file']
+    };
+
+    function isTcSql(buildId) {
+        return buildId && buildId.toLowerCase() === 'tc_sql';
+    }
+
+    function isTcPowerShell(buildId) {
+        return buildId && buildId.toLowerCase() === 'tc_powershell';
+    }
+
+    function updateTcParamsVisibility(buildId) {
+        const sqlSection = document.getElementById('tcSqlParams');
+        const psSection = document.getElementById('tcPowerShellParams');
+        sqlSection.style.display = isTcSql(buildId) ? '' : 'none';
+        psSection.style.display = isTcPowerShell(buildId) ? '' : 'none';
+    }
+
+    function loadTcParams(node) {
+        const params = node.params || {};
+        // TC_SQL fields
+        document.getElementById('nodeEditSqlServer').value = params.sqlserver || '';
+        document.getElementById('nodeEditDatabase').value = params.database || '';
+        document.getElementById('nodeEditSqlFile').value = params.file || '';
+        // TC_PowerShell fields
+        document.getElementById('nodeEditPsServers').value = params.servers || '';
+        document.getElementById('nodeEditPsFile').value = params.file || '';
+    }
+
+    function saveTcParams(node) {
+        const buildId = node.buildid;
+        if (isTcSql(buildId)) {
+            node.params = {
+                sqlserver: document.getElementById('nodeEditSqlServer').value.trim(),
+                database: document.getElementById('nodeEditDatabase').value.trim(),
+                file: document.getElementById('nodeEditSqlFile').value.trim()
+            };
+        } else if (isTcPowerShell(buildId)) {
+            node.params = {
+                servers: document.getElementById('nodeEditPsServers').value.trim(),
+                file: document.getElementById('nodeEditPsFile').value.trim()
+            };
+        } else {
+            delete node.params;
+        }
+    }
+
     // ========== VALIDATORS ==========
 
     function validateNodeName(flow, name, excludeNodeId) {
@@ -179,6 +230,8 @@ const App = (() => {
 
     function validateBuildId(flow, buildid, excludeNodeId) {
         if (!buildid) return null; // empty is allowed (placeholder used)
+        // TC_SQL and TC_PowerShell can be duplicated (same buildid, different name)
+        if (isTcSql(buildid) || isTcPowerShell(buildid)) return null;
         const duplicate = Object.values(flow.nodes).find(
             n => n.buildid === buildid && n.id !== excludeNodeId
         );
@@ -499,6 +552,16 @@ const App = (() => {
         document.getElementById('nodeEditRetry').value = node.retry || '';
         document.getElementById('nodeEditExternal').value = node.external || '';
 
+        // Show/hide TC params and load values
+        updateTcParamsVisibility(node.buildid || '');
+        loadTcParams(node);
+
+        // Listen for buildid changes to toggle TC params
+        const buildIdInput = document.getElementById('nodeEditBuildId');
+        buildIdInput.oninput = function() {
+            updateTcParamsVisibility(this.value.trim());
+        };
+
         // Clear previous validation messages
         clearValidation();
 
@@ -537,6 +600,9 @@ const App = (() => {
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
         node.retry = document.getElementById('nodeEditRetry').value.trim();
         node.external = document.getElementById('nodeEditExternal').value.trim();
+
+        // Save TC params
+        saveTcParams(node);
 
         // Update waitfor references if name changed
         if (oldName !== newName) {
@@ -673,6 +739,10 @@ const App = (() => {
             build.buildid = node.buildid || 'NAZWA_BUILDA';
             if (node.retry) build.retry = node.retry;
             if (node.external) build.external = node.external;
+            // TC params
+            if (node.params && Object.keys(node.params).length > 0) {
+                build.params = { ...node.params };
+            }
             json.builds[node.name] = build;
         });
 
@@ -951,6 +1021,79 @@ const App = (() => {
         };
     }
 
+    // ========== BULK PASTE BUILDS ==========
+
+    function bulkAddBuilds() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        const textarea = document.getElementById('bulkBuildList');
+        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+        if (lines.length === 0) {
+            showToast('Wklej przynajmniej jedną nazwę builda', 'error');
+            return;
+        }
+
+        // Check for duplicates in input
+        const seen = new Set();
+        const duplicates = [];
+        lines.forEach(name => {
+            if (seen.has(name)) duplicates.push(name);
+            seen.add(name);
+        });
+        if (duplicates.length > 0) {
+            showToast(`Duplikaty na liście: ${duplicates.join(', ')}`, 'error');
+            return;
+        }
+
+        // Check name conflicts with existing nodes
+        const existingNames = new Set(Object.values(flow.nodes).map(n => n.name));
+        const conflicts = lines.filter(name => existingNames.has(name));
+
+        let addedNames = lines;
+        if (conflicts.length > 0) {
+            // Auto-rename conflicting by appending suffix
+            addedNames = lines.map(name => {
+                let finalName = name;
+                let counter = 2;
+                while (existingNames.has(finalName)) {
+                    finalName = name + '_' + counter;
+                    counter++;
+                }
+                existingNames.add(finalName);
+                return finalName;
+            });
+            showToast(`Zmieniono nazwy ${conflicts.length} konfliktujących buildów`, 'info');
+        }
+
+        const canvas = document.getElementById('canvas');
+        const canvasW = canvas.offsetWidth || 600;
+        const nodeW = 180;
+        const existingCount = Object.keys(flow.nodes).length;
+
+        addedNames.forEach((name, i) => {
+            state.nodeCounter++;
+            const nodeId = 'node_' + state.nodeCounter;
+            flow.nodes[nodeId] = {
+                id: nodeId,
+                name: name,
+                buildid: lines[i], // original name as buildid
+                enabled: 1,
+                waitfor: '',
+                retry: '',
+                external: '',
+                x: Math.max(30, (canvasW - nodeW) / 2),
+                y: 30 + (existingCount + i) * 110
+            };
+        });
+
+        textarea.value = '';
+        renderCanvas();
+        updateJsonPreview();
+        expandCanvasIfNeeded();
+        showToast(`Dodano ${addedNames.length} buildów do flow`, 'success');
+    }
+
     // ========== EXTERNA MODE ==========
 
     let externaJson = null;
@@ -960,7 +1103,7 @@ const App = (() => {
             t.classList.toggle('active', t.dataset.mode === mode);
         });
         document.getElementById('editorMode').style.display = mode === 'editor' ? '' : 'none';
-        document.getElementById('externaMode').style.display = mode === 'externa' ? '' : 'none';
+        document.getElementById('externaMode').style.display = mode === 'externa' ? 'flex' : 'none';
 
         if (mode === 'externa') {
             populateExternaRunat();
@@ -1111,7 +1254,8 @@ const App = (() => {
         switchMode,
         generateExterna,
         copyExternaJson,
-        downloadExternaJson
+        downloadExternaJson,
+        bulkAddBuilds: withSave(bulkAddBuilds)
     };
 })();
 

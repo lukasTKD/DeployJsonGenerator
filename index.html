@@ -16,7 +16,7 @@
             <div class="header-center">
                 <div class="mode-tabs">
                     <button class="mode-tab active" data-mode="editor" onclick="App.switchMode('editor')">Flow Editor</button>
-                    <button class="mode-tab" data-mode="externa" onclick="App.switchMode('externa')">Externa</button>
+                    <button class="mode-tab" data-mode="externa" onclick="App.switchMode('externa')">External</button>
                 </div>
             </div>
             <div class="header-right">
@@ -90,6 +90,20 @@
                             </select>
                         </div>
                     </div>
+                </div>
+
+                <!-- Bulk Paste Builds -->
+                <div class="bulk-paste-container card">
+                    <div class="canvas-toolbar">
+                        <h3 class="section-title">Szybkie dodawanie buildów</h3>
+                        <div class="toolbar-actions">
+                            <button class="btn btn-primary btn-sm" onclick="App.bulkAddBuilds()">Dodaj buildy</button>
+                        </div>
+                    </div>
+                    <div class="canvas-info">
+                        <span>Wklej listę nazw buildów (każdy w nowej linii) — zostaną dodane jako nody do bieżącego flow</span>
+                    </div>
+                    <textarea id="bulkBuildList" class="externa-textarea" rows="4" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3"></textarea>
                 </div>
 
                 <!-- Diagram Canvas -->
@@ -184,7 +198,7 @@
                         </div>
                     </div>
 
-                    <div class="form-group" style="margin-top:12px;">
+                    <div class="form-group" style="margin-top:8px; flex:1; display:flex; flex-direction:column;">
                         <label>Lista buildów (jeden na linię)</label>
                         <textarea id="externaBuildList" class="externa-textarea" rows="12" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3&#10;..."></textarea>
                     </div>
@@ -242,6 +256,36 @@
                 <div class="form-group">
                     <label>external</label>
                     <input type="text" id="nodeEditExternal" placeholder="Opcjonalne">
+                </div>
+
+                <!-- TC_SQL params -->
+                <div id="tcSqlParams" class="tc-params-section" style="display:none;">
+                    <div class="tc-params-header">Parametry TC_SQL</div>
+                    <div class="form-group">
+                        <label>sqlserver</label>
+                        <input type="text" id="nodeEditSqlServer" placeholder="np. SQLSERVER01">
+                    </div>
+                    <div class="form-group">
+                        <label>database</label>
+                        <input type="text" id="nodeEditDatabase" placeholder="np. MyDatabase">
+                    </div>
+                    <div class="form-group">
+                        <label>file</label>
+                        <input type="text" id="nodeEditSqlFile" placeholder="np. script.sql">
+                    </div>
+                </div>
+
+                <!-- TC_PowerShell params -->
+                <div id="tcPowerShellParams" class="tc-params-section" style="display:none;">
+                    <div class="tc-params-header">Parametry TC_PowerShell</div>
+                    <div class="form-group">
+                        <label>servers</label>
+                        <input type="text" id="nodeEditPsServers" placeholder="np. SRV01,SRV02">
+                    </div>
+                    <div class="form-group">
+                        <label>file</label>
+                        <input type="text" id="nodeEditPsFile" placeholder="np. deploy.ps1">
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

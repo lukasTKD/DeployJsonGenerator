@@ -19,7 +19,7 @@ body {
 .header {
     background: #F6F6F6;
     border-bottom: 2px solid #E60000;
-    padding: 15px 0;
+    padding: 10px 0;
 }
 
 .header-content {
@@ -110,8 +110,11 @@ body {
 /* Container */
 .container {
     width: 95%;
-    margin: 20px auto;
+    margin: 10px auto;
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 /* Cards */
@@ -829,38 +832,84 @@ body {
     to { opacity: 0; }
 }
 
+/* TC Build Params Section */
+.tc-params-section {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    background: #f8f9fa;
+}
+
+.tc-params-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: #E60000;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+/* Bulk Paste Builds */
+.bulk-paste-container {
+    margin-bottom: 0;
+}
+
+.bulk-paste-container .externa-textarea {
+    rows: 4;
+    min-height: 80px;
+}
+
 /* Externa Mode */
+#externaMode {
+    height: calc(100vh - 90px);
+    display: flex;
+    flex-direction: column;
+}
+
 .externa-layout {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 15px;
+    flex: 1;
+    min-height: 0;
+}
+
+.externa-layout > .card {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+    overflow: hidden;
 }
 
 .externa-desc {
     font-size: 13px;
     color: #666;
-    margin-bottom: 15px;
-    line-height: 1.5;
+    margin-bottom: 10px;
+    line-height: 1.4;
 }
 
 .externa-settings {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    gap: 8px;
 }
 
 .externa-textarea {
     width: 100%;
-    padding: 12px;
+    padding: 10px;
     border: 1px solid #ccc;
     border-radius: 6px;
     font-family: 'Consolas', 'Monaco', monospace;
     font-size: 13px;
-    line-height: 1.6;
+    line-height: 1.5;
     resize: vertical;
     color: #333;
     background: #fafafa;
     transition: border-color 0.2s, box-shadow 0.2s;
+    flex: 1;
+    min-height: 0;
 }
 
 .externa-textarea:focus {
@@ -874,7 +923,7 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 12px;
+    margin-top: 8px;
 }
 
 .externa-count {
@@ -883,8 +932,16 @@ body {
     font-weight: 500;
 }
 
+.externa-preview {
+    display: flex;
+    flex-direction: column;
+}
+
 .externa-preview .json-output {
-    max-height: 600px;
+    max-height: none;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
 }
 
 /* Responsive */
