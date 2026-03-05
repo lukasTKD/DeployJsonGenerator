@@ -256,7 +256,7 @@ const App = (() => {
             buildid: '',
             enabled: 1,
             waitfor: '',
-            retry: '',
+            retry: '1',
             external: '',
             x: Math.max(30, (canvasW - nodeW) / 2), // centered
             y: 30 + existingCount * 110
@@ -1099,7 +1099,7 @@ const App = (() => {
                 buildid: lines[i], // original name as buildid
                 enabled: 1,
                 waitfor: '',
-                retry: '',
+                retry: '1',
                 external: '',
                 x: Math.max(30, (canvasW - nodeW) / 2),
                 y: 30 + (existingCount + i) * 110
