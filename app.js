@@ -951,6 +951,109 @@ const App = (() => {
         };
     }
 
+    // ========== EXTERNA MODE ==========
+
+    let externaJson = null;
+
+    function switchMode(mode) {
+        document.querySelectorAll('.mode-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.mode === mode);
+        });
+        document.getElementById('editorMode').style.display = mode === 'editor' ? '' : 'none';
+        document.getElementById('externaMode').style.display = mode === 'externa' ? '' : 'none';
+
+        if (mode === 'externa') {
+            populateExternaRunat();
+            updateExternaBuildCount();
+        }
+    }
+
+    function populateExternaRunat() {
+        const select = document.getElementById('externaRunat');
+        if (select.options.length > 1) return;
+        generateTimeOptions().forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            select.appendChild(opt);
+        });
+    }
+
+    function updateExternaBuildCount() {
+        const textarea = document.getElementById('externaBuildList');
+        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        document.getElementById('externaBuildCount').textContent = `${lines.length} buildów`;
+    }
+
+    function generateExterna() {
+        const textarea = document.getElementById('externaBuildList');
+        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+        if (lines.length === 0) {
+            showToast('Wklej przynajmniej jedną nazwę builda', 'error');
+            return;
+        }
+
+        // Check for duplicates
+        const seen = new Set();
+        const duplicates = [];
+        lines.forEach(name => {
+            if (seen.has(name)) duplicates.push(name);
+            seen.add(name);
+        });
+        if (duplicates.length > 0) {
+            showToast(`Duplikaty: ${duplicates.join(', ')}`, 'error');
+            return;
+        }
+
+        const serverKey = document.getElementById('externaServer').value;
+        const runat = document.getElementById('externaRunat').value;
+        const waitfor = document.getElementById('externaWaitfor').value.trim();
+
+        const json = {
+            tcserver: SERVERS[serverKey],
+            enabled: 1,
+            runat: runat || '',
+            waitfor: waitfor || ''
+        };
+
+        json.builds = {};
+        lines.forEach(name => {
+            json.builds[name] = {
+                enabled: 1,
+                buildid: name,
+                externa: 1
+            };
+        });
+
+        externaJson = json;
+
+        const preview = document.getElementById('externaJsonPreview');
+        preview.innerHTML = syntaxHighlight(formatJson(json));
+        showToast(`Wygenerowano JSON z ${lines.length} buildami`, 'success');
+    }
+
+    function copyExternaJson() {
+        if (!externaJson) {
+            showToast('Najpierw wygeneruj JSON', 'error');
+            return;
+        }
+        navigator.clipboard.writeText(formatJson(externaJson)).then(() => {
+            showToast('JSON skopiowany do schowka', 'success');
+        }).catch(() => {
+            showToast('Nie udało się skopiować', 'error');
+        });
+    }
+
+    function downloadExternaJson() {
+        if (!externaJson) {
+            showToast('Najpierw wygeneruj JSON', 'error');
+            return;
+        }
+        const filename = (document.getElementById('externaFilename').value.trim() || 'externa_deploy') + '.json';
+        downloadJsonFile(filename, externaJson);
+    }
+
     // ========== KEYBOARD SHORTCUTS ==========
 
     function initKeyboard() {
@@ -978,6 +1081,11 @@ const App = (() => {
         renderAllFilesList();
         initKeyboard();
         setInterval(saveState, 5000);
+        // Live build count for externa
+        const extTextarea = document.getElementById('externaBuildList');
+        if (extTextarea) {
+            extTextarea.addEventListener('input', updateExternaBuildCount);
+        }
     }
 
     // ========== PUBLIC API ==========
@@ -999,7 +1107,11 @@ const App = (() => {
         copyJson,
         downloadCurrentJson,
         downloadFlowJson,
-        downloadAllJson
+        downloadAllJson,
+        switchMode,
+        generateExterna,
+        copyExternaJson,
+        downloadExternaJson
     };
 })();
 
