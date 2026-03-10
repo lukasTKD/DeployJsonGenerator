@@ -1121,8 +1121,6 @@ const App = (() => {
         const serverKey = document.getElementById('externaServer').value;
         const runat = document.getElementById('externaRunat').value;
         const waitfor = document.getElementById('externaWaitfor').value.trim();
-        const stopVal = document.getElementById('externaStop').value.trim();
-
         const json = {
             tcserver: SERVERS[serverKey],
             enabled: 1,
@@ -1132,13 +1130,11 @@ const App = (() => {
 
         json.builds = {};
         lines.forEach(name => {
-            const build = {
+            json.builds[name] = {
                 enabled: 1,
                 buildid: name,
                 externa: 1
             };
-            if (stopVal) build.stop = stopVal;
-            json.builds[name] = build;
         });
 
         externaJson = json;
