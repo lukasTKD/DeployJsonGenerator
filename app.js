@@ -21,6 +21,14 @@ const App = (() => {
         connecting: null
     };
 
+    let currentUsername = '';
+
+    function getStorageKey() {
+        return currentUsername
+            ? 'deployJsonGenerator_' + currentUsername
+            : 'deployJsonGenerator';
+    }
+
     // ========== TIME OPTIONS (runat) ==========
 
     function generateTimeOptions() {
@@ -74,6 +82,27 @@ const App = (() => {
         renderInterflowDeps();
         renderAllFilesList();
         return id;
+    }
+
+    function closeAllFlows() {
+        const serverFlows = getServerFlows();
+        if (serverFlows.length === 0) return;
+        if (!confirm('Zamknąć wszystkie flow dla bieżącego serwera? Dane zostaną usunięte.')) return;
+        const serverFlowIds = new Set(serverFlows.map(f => f.id));
+        // Remove flows belonging to current server
+        serverFlowIds.forEach(id => {
+            delete state.flows[id];
+        });
+        state.flowOrder = state.flowOrder.filter(id => !serverFlowIds.has(id));
+        // Clean interflow refs in remaining flows
+        Object.values(state.flows).forEach(f => {
+            if (Array.isArray(f.interflowWaitfor)) {
+                f.interflowWaitfor = f.interflowWaitfor.filter(wid => !serverFlowIds.has(wid));
+            }
+        });
+        // Create one fresh flow
+        addFlow();
+        showToast('Zamknięto wszystkie flow', 'success');
     }
 
     function removeFlow(flowId) {
@@ -982,7 +1011,7 @@ const App = (() => {
 
     function saveState() {
         try {
-            localStorage.setItem('deployJsonGenerator', JSON.stringify({
+            localStorage.setItem(getStorageKey(), JSON.stringify({
                 currentServer: state.currentServer,
                 currentFlowId: state.currentFlowId,
                 flows: state.flows,
@@ -994,7 +1023,7 @@ const App = (() => {
 
     function loadState() {
         try {
-            const data = JSON.parse(localStorage.getItem('deployJsonGenerator'));
+            const data = JSON.parse(localStorage.getItem(getStorageKey()));
             if (data && data.flows && Object.keys(data.flows).length > 0) {
                 state.currentServer = data.currentServer || 'haaTeamCity';
                 state.currentFlowId = data.currentFlowId;
@@ -1230,7 +1259,21 @@ const App = (() => {
 
     // ========== INIT ==========
 
-    function init() {
+    async function fetchUsername() {
+        try {
+            const resp = await fetch('whoami.aspx');
+            if (resp.ok) {
+                const data = await resp.json();
+                currentUsername = data.username || '';
+            }
+        } catch (e) {
+            // Fallback: no per-user isolation
+            currentUsername = '';
+        }
+    }
+
+    async function init() {
+        await fetchUsername();
         const loaded = loadState();
         if (!loaded) {
             addFlow();
@@ -1258,6 +1301,7 @@ const App = (() => {
         init,
         addFlow: withSave(addFlow),
         removeFlow: withSave(removeFlow),
+        closeAllFlows: withSave(closeAllFlows),
         switchFlow,
         switchServer,
         updateFlowSetting: withSave(updateFlowSetting),
