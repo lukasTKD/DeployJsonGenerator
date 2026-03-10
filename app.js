@@ -69,9 +69,9 @@ const App = (() => {
             blackout: '',
             sms: '',
             change: '',
+            stop: '',
             nodes: {},
-            connections: [],
-            interflowWaitfor: [] // ARRAY - multiple dependencies
+            connections: []
         };
         state.flowOrder.push(id);
         state.currentFlowId = id;
@@ -79,7 +79,7 @@ const App = (() => {
         renderCurrentFlow();
         updateFlowCount();
         updateJsonPreview();
-        renderInterflowDeps();
+
         renderAllFilesList();
         return id;
     }
@@ -94,12 +94,6 @@ const App = (() => {
             delete state.flows[id];
         });
         state.flowOrder = state.flowOrder.filter(id => !serverFlowIds.has(id));
-        // Clean interflow refs in remaining flows
-        Object.values(state.flows).forEach(f => {
-            if (Array.isArray(f.interflowWaitfor)) {
-                f.interflowWaitfor = f.interflowWaitfor.filter(wid => !serverFlowIds.has(wid));
-            }
-        });
         // Create one fresh flow
         addFlow();
         showToast('Zamknięto wszystkie flow', 'success');
@@ -113,12 +107,6 @@ const App = (() => {
         if (!confirm('Usunąć ten flow?')) return;
         delete state.flows[flowId];
         state.flowOrder = state.flowOrder.filter(id => id !== flowId);
-        // Clean up interflow references
-        Object.values(state.flows).forEach(f => {
-            if (Array.isArray(f.interflowWaitfor)) {
-                f.interflowWaitfor = f.interflowWaitfor.filter(wid => wid !== flowId);
-            }
-        });
         if (state.currentFlowId === flowId) {
             state.currentFlowId = state.flowOrder[0];
         }
@@ -126,7 +114,7 @@ const App = (() => {
         renderCurrentFlow();
         updateFlowCount();
         updateJsonPreview();
-        renderInterflowDeps();
+
         renderAllFilesList();
     }
 
@@ -146,7 +134,7 @@ const App = (() => {
         renderCurrentFlow();
         updateJsonPreview();
         renderAllFilesList();
-        renderInterflowDeps();
+
     }
 
     function getCurrentFlow() {
@@ -167,7 +155,7 @@ const App = (() => {
         flow[key] = value;
         if (key === 'filename') {
             renderFlowTabs();
-            renderInterflowDeps();
+    
         }
         updateJsonPreview();
         renderAllFilesList();
@@ -179,22 +167,12 @@ const App = (() => {
         populateRunatSelect();
         document.getElementById('flowFilename').value = flow.filename || '';
         document.getElementById('flowRunat').value = flow.runat || '';
-        // waitfor is derived from interflowWaitfor - show as comma-separated filenames
-        const waitforNames = getInterflowWaitforNames(flow);
-        document.getElementById('flowWaitfor').value = waitforNames.join(', ') || '';
+        document.getElementById('flowStop').value = flow.stop || '';
         document.getElementById('flowEmail').value = flow.email || '';
         document.getElementById('flowBlackout').value = flow.blackout || '';
         document.getElementById('flowSms').value = flow.sms || '';
         document.getElementById('flowChange').value = flow.change || '';
         document.getElementById('flowEnabled').value = flow.enabled;
-    }
-
-    function getInterflowWaitforNames(flow) {
-        if (!Array.isArray(flow.interflowWaitfor)) return [];
-        return flow.interflowWaitfor
-            .map(fid => state.flows[fid])
-            .filter(f => f)
-            .map(f => f.filename);
     }
 
     // ========== TC BUILD PARAMS ==========
@@ -744,15 +722,8 @@ const App = (() => {
         // runat always present
         json.runat = flow.runat || '';
 
-        // waitfor from interflow dependencies (can be multiple)
-        const waitforNames = getInterflowWaitforNames(flow);
-        if (waitforNames.length === 1) {
-            json.waitfor = waitforNames[0];
-        } else if (waitforNames.length > 1) {
-            json.waitfor = waitforNames.join(',');
-        }
-
         // Optional root-level fields
+        if (flow.stop) json.stop = flow.stop;
         if (flow.email) json.email = flow.email;
         if (flow.blackout) json.blackout = flow.blackout;
         if (flow.sms) json.sms = flow.sms;
@@ -862,59 +833,6 @@ const App = (() => {
     function renderCurrentFlow() {
         loadFlowSettings();
         renderCanvas();
-    }
-
-    function renderInterflowDeps() {
-        const list = document.getElementById('interflowList');
-        const serverFlows = getServerFlows();
-
-        if (serverFlows.length < 2) {
-            list.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">Dodaj więcej niż jeden flow aby ustawić zależności między nimi.</div>';
-            return;
-        }
-
-        list.innerHTML = serverFlows.map(flow => {
-            // Migrate old string format to array
-            if (!Array.isArray(flow.interflowWaitfor)) {
-                flow.interflowWaitfor = flow.interflowWaitfor ? [flow.interflowWaitfor] : [];
-            }
-            const otherFlows = serverFlows.filter(f => f.id !== flow.id);
-            const checkboxes = otherFlows.map(f => {
-                const checked = flow.interflowWaitfor.includes(f.id) ? 'checked' : '';
-                return `
-                    <label class="interflow-checkbox-label">
-                        <input type="checkbox" ${checked}
-                            onchange="App.toggleInterflowDep('${flow.id}', '${f.id}', this.checked)">
-                        <span>${escapeHtml(f.filename)}.json</span>
-                    </label>
-                `;
-            }).join('');
-
-            return `
-                <div class="interflow-item">
-                    <label>${escapeHtml(flow.filename)}.json</label>
-                    <span>czeka na:</span>
-                    <div class="interflow-checkboxes">${checkboxes}</div>
-                </div>
-            `;
-        }).join('');
-    }
-
-    function toggleInterflowDep(flowId, waitforFlowId, checked) {
-        const flow = state.flows[flowId];
-        if (!flow) return;
-        if (!Array.isArray(flow.interflowWaitfor)) flow.interflowWaitfor = [];
-
-        if (checked) {
-            if (!flow.interflowWaitfor.includes(waitforFlowId)) {
-                flow.interflowWaitfor.push(waitforFlowId);
-            }
-        } else {
-            flow.interflowWaitfor = flow.interflowWaitfor.filter(id => id !== waitforFlowId);
-        }
-
-        loadFlowSettings();
-        updateJsonPreview();
     }
 
     function renderAllFilesList() {
@@ -1030,12 +948,6 @@ const App = (() => {
                 state.flows = data.flows;
                 state.flowOrder = data.flowOrder || [];
                 state.nodeCounter = data.nodeCounter || 0;
-                // Migrate old interflowWaitfor string to array
-                Object.values(state.flows).forEach(f => {
-                    if (!Array.isArray(f.interflowWaitfor)) {
-                        f.interflowWaitfor = f.interflowWaitfor ? [f.interflowWaitfor] : [];
-                    }
-                });
                 return true;
             }
         } catch (e) { /* ignore */ }
@@ -1202,6 +1114,7 @@ const App = (() => {
         const serverKey = document.getElementById('externaServer').value;
         const runat = document.getElementById('externaRunat').value;
         const waitfor = document.getElementById('externaWaitfor').value.trim();
+        const stopVal = document.getElementById('externaStop').value.trim();
 
         const json = {
             tcserver: SERVERS[serverKey],
@@ -1212,11 +1125,13 @@ const App = (() => {
 
         json.builds = {};
         lines.forEach(name => {
-            json.builds[name] = {
+            const build = {
                 enabled: 1,
                 buildid: name,
                 externa: 1
             };
+            if (stopVal) build.stop = stopVal;
+            json.builds[name] = build;
         });
 
         externaJson = json;
@@ -1285,7 +1200,7 @@ const App = (() => {
         renderCurrentFlow();
         updateFlowCount();
         updateJsonPreview();
-        renderInterflowDeps();
+
         renderAllFilesList();
         initKeyboard();
         setInterval(saveState, 5000);
@@ -1312,7 +1227,6 @@ const App = (() => {
         saveNodeEdit: withSave(saveNodeEdit),
         autoLayout: withSave(autoLayout),
         clearCanvas: withSave(clearCanvas),
-        toggleInterflowDep: withSave(toggleInterflowDep),
         copyJson,
         downloadCurrentJson,
         downloadFlowJson,

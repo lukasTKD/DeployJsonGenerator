@@ -73,8 +73,8 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>waitfor (pliki JSON)</label>
-                            <input type="text" id="flowWaitfor" placeholder="Ustawiane w sekcji zależności" readonly>
+                            <label>stop (opcjonalne)</label>
+                            <input type="text" id="flowStop" placeholder="Opcjonalne" onchange="App.updateFlowSetting('stop', this.value)">
                         </div>
                         <div class="form-group">
                             <label>email</label>
@@ -121,16 +121,6 @@
                     </div>
                 </div>
 
-                <!-- Inter-flow Dependencies -->
-                <div class="interflow-container card">
-                    <h3 class="section-title">Zależności między plikami JSON</h3>
-                    <div class="interflow-info">
-                        <span>Ustaw kolejność wykonywania plików JSON (waitfor na poziomie pliku)</span>
-                    </div>
-                    <div class="interflow-list" id="interflowList">
-                        <!-- Generated dynamically -->
-                    </div>
-                </div>
             </div>
 
             <!-- Right Panel - JSON Preview -->
@@ -208,6 +198,10 @@
                         <div class="form-group">
                             <label>waitfor</label>
                             <input type="text" id="externaWaitfor" placeholder="Opcjonalne" value="">
+                        </div>
+                        <div class="form-group">
+                            <label>stop (opcjonalne)</label>
+                            <input type="text" id="externaStop" placeholder="Opcjonalne" value="">
                         </div>
                     </div>
 
