@@ -558,6 +558,7 @@ const App = (() => {
         document.getElementById('nodeEditWaitfor').value = node.waitfor || '';
         document.getElementById('nodeEditRetry').value = node.retry || '';
         document.getElementById('nodeEditExternal').value = node.external || '';
+        document.getElementById('nodeEditStop').value = node.stop || '';
 
         // Show/hide TC params and load values
         updateTcParamsVisibility(node.buildid || '');
@@ -607,6 +608,7 @@ const App = (() => {
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
         node.retry = document.getElementById('nodeEditRetry').value.trim();
         node.external = document.getElementById('nodeEditExternal').value.trim();
+        node.stop = document.getElementById('nodeEditStop').value.trim();
 
         // Save TC params
         saveTcParams(node);
@@ -743,6 +745,7 @@ const App = (() => {
             build.buildid = node.buildid || 'NAZWA_BUILDA';
             if (node.retry) build.retry = node.retry;
             if (node.external) build.external = node.external;
+            if (node.stop) build.stop = node.stop;
             // TC params
             if (node.params && Object.keys(node.params).length > 0) {
                 build.params = { ...node.params };
