@@ -680,19 +680,23 @@ const App = (() => {
             levelGroups[lvl].push(n);
         });
 
-        // Position: TOP-TO-BOTTOM layout
+        // Position: VERTICAL layout (one node per row, top-to-bottom)
         const canvas = document.getElementById('canvas');
         const canvasW = canvas.offsetWidth || 700;
-        const gapY = 120; // vertical gap between levels
-        const gapX = 200; // horizontal gap between siblings
+        const nodeW = 180;
+        const gapY = 120; // vertical gap between rows
         const startY = 30;
+        const centerX = Math.max(30, (canvasW - nodeW) / 2);
 
-        Object.entries(levelGroups).forEach(([level, group]) => {
-            const totalWidth = group.length * gapX;
-            const startX = Math.max(20, (canvasW - totalWidth) / 2);
-            group.forEach((node, idx) => {
-                node.x = startX + idx * gapX;
-                node.y = startY + parseInt(level) * gapY;
+        // Flatten levels into a single vertical list
+        let row = 0;
+        const sortedLevels = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
+        sortedLevels.forEach(level => {
+            const group = levelGroups[level];
+            group.forEach(node => {
+                node.x = centerX;
+                node.y = startY + row * gapY;
+                row++;
             });
         });
 
