@@ -273,8 +273,10 @@ const App = (() => {
         const bpv = document.getElementById('nodeEditBuildPropertyValue').value.trim();
         const af = document.getElementById('nodeEditArtifactoryFolder').value.trim();
         const rat = document.getElementById('nodeEditRenewAppTC').value.trim();
-        if (bpn) params.buildPropertyName = bpn;
-        if (bpv) params.buildPropertyValue = bpv;
+        if (bpn) {
+            params.buildPropertyName = bpn;
+            params.buildPropertyValue = bpv;
+        }
         if (af) params.artifactoryFolder = af;
         if (rat) params.renewAppTC = rat;
         if (Object.keys(params).length > 0) {
@@ -1223,8 +1225,10 @@ const App = (() => {
         }
 
         const params = {};
-        if (item.buildPropertyName) params.buildPropertyName = item.buildPropertyName;
-        if (paramValue) params.buildPropertyValue = paramValue;
+        if (item.buildPropertyName) {
+            params.buildPropertyName = item.buildPropertyName;
+            params.buildPropertyValue = paramValue;
+        }
         if (item.artifactoryFolder) params.artifactoryFolder = item.artifactoryFolder;
         if (item.renewAppTC) params.renewAppTC = item.renewAppTC;
 
