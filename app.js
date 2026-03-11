@@ -125,11 +125,24 @@ const App = (() => {
         updateJsonPreview();
     }
 
+    function ensureCurrentServerFlow() {
+        const serverFlows = getServerFlows();
+        if (serverFlows.length > 0) {
+            if (!serverFlows.find(f => f.id === state.currentFlowId)) {
+                state.currentFlowId = serverFlows[0].id;
+            }
+            return state.currentFlowId;
+        }
+
+        return addFlow();
+    }
+
     function switchServer(server) {
         state.currentServer = server;
         document.querySelectorAll('.server-tabs-container .tab').forEach(t => {
             t.classList.toggle('active', t.dataset.server === server);
         });
+        ensureCurrentServerFlow();
         updateServerSpecificUI();
         renderFlowTabs();
         renderCurrentFlow();
@@ -283,7 +296,11 @@ const App = (() => {
     }
 
     function addNodeWithConfig(config = {}) {
-        const flow = getCurrentFlow();
+        let flow = getCurrentFlow();
+        if (!flow) {
+            ensureCurrentServerFlow();
+            flow = getCurrentFlow();
+        }
         if (!flow) return null;
 
         state.nodeCounter++;
@@ -1065,7 +1082,11 @@ const App = (() => {
     // ========== BULK PASTE BUILDS ==========
 
     function bulkAddBuilds() {
-        const flow = getCurrentFlow();
+        let flow = getCurrentFlow();
+        if (!flow) {
+            ensureCurrentServerFlow();
+            flow = getCurrentFlow();
+        }
         if (!flow) return;
         const textarea = document.getElementById('bulkBuildList');
         const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
