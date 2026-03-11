@@ -29,6 +29,7 @@
     {
         public string authMode { get; set; }
         public string baseUrl { get; set; }
+        public string artifactoryUser { get; set; }
         public string username { get; set; }
         public string password { get; set; }
         public string passwordEncrypted { get; set; }
@@ -260,9 +261,7 @@
     private ResolvedCredentials ResolveKeePassCredentials(ArtifactoryConfig config)
     {
         var scriptPath = GetKeePassResolverScriptPath();
-        var credentialTitle = !string.IsNullOrWhiteSpace(config.keePassCredentialTitle)
-            ? config.keePassCredentialTitle.Trim()
-            : (config.username ?? "").Trim();
+        var credentialTitle = GetCredentialTitle(config);
 
         if (!File.Exists(scriptPath))
         {
@@ -271,7 +270,7 @@
 
         if (string.IsNullOrWhiteSpace(credentialTitle))
         {
-            throw new Exception("Brak nazwy uzytkownika w konfiguracji Artifactory.");
+            throw new Exception("Brak artifactoryUser w konfiguracji Artifactory.");
         }
 
         var output = RunPowerShellFile(scriptPath, credentialTitle);
@@ -295,6 +294,26 @@
             Username = username,
             Password = result.password ?? ""
         };
+    }
+
+    private string GetCredentialTitle(ArtifactoryConfig config)
+    {
+        if (config == null)
+        {
+            return "";
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.artifactoryUser))
+        {
+            return config.artifactoryUser.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(config.keePassCredentialTitle))
+        {
+            return config.keePassCredentialTitle.Trim();
+        }
+
+        return (config.username ?? "").Trim();
     }
 
     private string GetKeePassResolverScriptPath()

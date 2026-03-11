@@ -1800,7 +1800,7 @@ const App = (() => {
             showToast('Wszystkie paczki są dostępne w Artifactory', 'success');
         } catch (error) {
             renderValidationResult({ ok: false, error: error.message || 'Nie udało się wykonać walidacji.' }, validation.skipped);
-            showToast('Nie udało się połączyć z walidacją Artifactory', 'error');
+            showToast(error.message || 'Nie udało się połączyć z walidacją Artifactory', 'error');
         } finally {
             setFerrytValidationBusy(false);
         }
