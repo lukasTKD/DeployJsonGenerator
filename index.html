@@ -108,12 +108,15 @@
                     <div class="canvas-toolbar">
                         <h3 class="section-title">Diagram Flow</h3>
                         <div class="toolbar-actions">
-                            <button class="btn btn-primary" onclick="App.addNode()">+ Dodaj Build</button>
+                            <button class="btn btn-primary" id="btnAddNodeGeneric" onclick="App.addNode()">+ Dodaj Build</button>
                             <button class="btn btn-secondary" id="btnAddSqlRunner" onclick="App.addSqlRunner()" style="display:none">+ Dodaj SQLRunner</button>
                             <button class="btn btn-secondary" id="btnAddScriptRunner" onclick="App.addScriptRunner()" style="display:none">+ Dodaj ScriptRunner</button>
-                            <button class="btn btn-secondary" id="btnAddFerrytBuild" onclick="App.openBuildCatalog()" style="display:none">+ Dodaj Build Ferrytowy</button>
-                            <button class="btn btn-secondary" onclick="App.autoLayout()">Auto Layout</button>
-                            <button class="btn btn-danger" onclick="App.clearCanvas()">Wyczyść</button>
+                            <div class="ferryt-toolbar-actions" id="ferrytToolbarActions" style="display:none;">
+                                <!-- Generated dynamically -->
+                            </div>
+                            <button class="btn btn-secondary" id="btnValidateFerryt" onclick="App.validateFerrytPackages()" style="display:none">Validate</button>
+                            <button class="btn btn-secondary" id="btnAutoLayout" onclick="App.autoLayout()">Auto Layout</button>
+                            <button class="btn btn-danger" id="btnClearCanvas" onclick="App.clearCanvas()">Wyczyść</button>
                         </div>
                     </div>
                     <div class="canvas-info">
@@ -241,22 +244,6 @@
         </div><!-- /externaMode -->
     </div><!-- /container -->
 
-    <div class="modal-overlay" id="buildCatalogModal" style="display:none;">
-        <div class="modal-box" style="width:760px;">
-            <div class="modal-header">
-                <h3>Buildy Ferryt</h3>
-                <button class="modal-close" onclick="App.closeBuildCatalog()">&times;</button>
-            </div>
-            <div class="modal-body" id="catalogBuildList">
-                <!-- Generated dynamically -->
-            </div>
-            <div class="modal-footer">
-                <span class="catalog-hint">Wypełnij wymagane pola i kliknij "Dodaj" przy wybranym buildzie.</span>
-                <button class="btn btn-secondary" onclick="App.closeBuildCatalog()">Zamknij</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Node Edit Modal -->
     <div class="modal-overlay" id="nodeEditModal" style="display:none;">
         <div class="modal-box">
@@ -329,12 +316,36 @@
 
                 <div id="ferrytParams" class="tc-params-section" style="display:none;">
                     <div class="tc-params-header">Parametry Ferryt</div>
+                    <div class="form-group" id="ferrytRenewTypeGroup" style="display:none;">
+                        <label>Renew Type *</label>
+                        <select id="nodeEditFerrytRenewType" onchange="App.handleFerrytRenewTypeChange(this.value)">
+                            <option value="">-- wybierz --</option>
+                            <option value="RenewApplication File">File</option>
+                            <option value="RenewApplication SQL">SQL</option>
+                            <option value="RenewApplication Scenario">Scenario</option>
+                        </select>
+                    </div>
                     <div id="ferrytParamsFields"></div>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-danger" onclick="App.deleteNode()">Usuń Build</button>
                 <button class="btn btn-primary" onclick="App.saveNodeEdit()">Zapisz</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="validationResultModal" style="display:none;">
+        <div class="modal-box" style="width:860px;">
+            <div class="modal-header">
+                <h3>Walidacja Artifactory</h3>
+                <button class="modal-close" onclick="App.closeValidationResult()">&times;</button>
+            </div>
+            <div class="modal-body" id="validationResultBody">
+                <!-- Generated dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="App.closeValidationResult()">Zamknij</button>
             </div>
         </div>
     </div>

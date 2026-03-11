@@ -289,13 +289,15 @@ body {
 }
 
 .btn-add-flow {
-    width: 36px;
-    height: 36px;
-    border: 2px dashed #ccc;
-    border-radius: 50%;
-    background: transparent;
-    color: #999;
+    min-width: 42px;
+    height: 34px;
+    padding: 0 14px;
+    border: none;
+    border-radius: 4px;
+    background: #ff8600;
+    color: #fff;
     font-size: 20px;
+    font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -306,9 +308,8 @@ body {
 }
 
 .btn-add-flow:hover {
-    border-color: #E60000;
-    color: #E60000;
-    background: #fff5f5;
+    background: #e67800;
+    box-shadow: 0 2px 6px rgba(255, 134, 0, 0.3);
 }
 
 .btn-close-all-flows {
@@ -329,6 +330,18 @@ body {
     border-color: #c62828;
     color: #c62828;
     background: #fff5f5;
+}
+
+#btnCloseAll {
+    background: #e90a0a;
+    border-color: #e90a0a;
+    color: #fff;
+}
+
+#btnCloseAll:hover {
+    background: #cf0909;
+    border-color: #cf0909;
+    color: #fff;
 }
 
 /* Main Content Layout */
@@ -445,18 +458,40 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 12px;
     margin-bottom: 10px;
 }
 
 .canvas-toolbar .section-title {
     margin-bottom: 0;
+    flex: 0 0 auto;
 }
 
 .toolbar-actions {
     display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    align-items: center;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+}
+
+.ferryt-toolbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+.ferryt-toolbar-btn {
+    white-space: nowrap;
+    flex: 0 0 auto;
 }
 
 .canvas-info {
@@ -831,15 +866,126 @@ body {
     flex: 1;
 }
 
-#btnAddFerrytBuild {
+#btnValidateFerryt {
     background: #ff6600;
     color: #fff;
     border: none;
 }
 
-#btnAddFerrytBuild:hover {
+#btnValidateFerryt:hover {
     background: #e55c00;
     box-shadow: 0 2px 6px rgba(255, 102, 0, 0.3);
+}
+
+#btnValidateFerryt:disabled {
+    opacity: 0.7;
+    cursor: wait;
+    box-shadow: none;
+}
+
+#btnAutoLayout {
+    background: #31548b;
+    color: #fff;
+    border: none;
+}
+
+#btnAutoLayout:hover {
+    background: #294774;
+    box-shadow: 0 2px 6px rgba(49, 84, 139, 0.3);
+}
+
+#btnAddNodeGeneric {
+    background: #ff8600;
+    color: #fff;
+    border: none;
+}
+
+#btnAddNodeGeneric:hover {
+    background: #e67800;
+    box-shadow: 0 2px 6px rgba(255, 134, 0, 0.3);
+}
+
+#btnClearCanvas {
+    background: #e90a0a;
+    color: #fff;
+    border: none;
+}
+
+#btnClearCanvas:hover {
+    background: #cf0909;
+    box-shadow: 0 2px 6px rgba(233, 10, 10, 0.3);
+}
+
+.validation-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.validation-summary {
+    padding: 10px 12px;
+    border: 1px solid #e2e2e2;
+    border-radius: 6px;
+    background: #f8f9fa;
+    font-size: 13px;
+}
+
+.validation-summary-missing {
+    border-color: #f2b8b5;
+    background: #fff5f5;
+}
+
+.validation-summary-error {
+    border-color: #f2b8b5;
+    background: #fff5f5;
+    color: #a12622;
+    margin-bottom: 12px;
+}
+
+.validation-section {
+    margin-top: 18px;
+}
+
+.validation-section h4 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    color: #333;
+}
+
+.validation-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 12px;
+    border: 1px solid #ececec;
+    border-radius: 6px;
+    background: #fff;
+    margin-bottom: 8px;
+}
+
+.validation-main,
+.validation-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 12px;
+}
+
+.validation-main strong {
+    font-size: 13px;
+    color: #222;
+}
+
+.validation-meta {
+    color: #666;
+    text-align: right;
+}
+
+.validation-empty {
+    color: #999;
+    font-size: 12px;
+    padding: 8px 0;
 }
 
 .interflow-info {
@@ -1266,6 +1412,13 @@ body {
 @media (max-width: 768px) {
     .settings-grid {
         grid-template-columns: repeat(2, 1fr);
+    }
+    .validation-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .validation-meta {
+        text-align: left;
     }
     .header-left {
         flex-direction: column;
