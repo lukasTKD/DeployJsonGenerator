@@ -1784,7 +1784,7 @@ const App = (() => {
                 })
             });
 
-            const data = await response.json();
+            const data = await parseValidationResponse(response);
             renderValidationResult(data, validation.skipped);
 
             if (!response.ok || data.ok === false) {
@@ -1803,6 +1803,30 @@ const App = (() => {
             showToast('Nie udało się połączyć z walidacją Artifactory', 'error');
         } finally {
             setFerrytValidationBusy(false);
+        }
+    }
+
+    async function parseValidationResponse(response) {
+        const raw = await response.text();
+        if (!raw) {
+            return {
+                ok: response.ok
+            };
+        }
+
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            const normalized = raw
+                .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            const snippet = normalized ? normalized.slice(0, 220) : raw.slice(0, 220).trim();
+            const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+            throw new Error(`Serwer zwrocil niepoprawny JSON (${status}). ${snippet || 'Brak tresci odpowiedzi.'}`);
         }
     }
 

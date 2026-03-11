@@ -1,11 +1,4 @@
 {
-    "authMode": "KeePassVault",
     "baseUrl": "https://artifactory.pl/",
-    "username": "",
-    "password": "",
-    "passwordEncrypted": "",
-    "passwordEncryptionScope": "CurrentUser",
-    "keePassScriptPath": "D:\\\\PROD_REPO\\\\API\\\\KeePassVault\\\\KeePassVaultAPI.ps1",
-    "keePassCredentialTitle": "domena\\\\login",
-    "keePassUsernameOverride": ""
+    "username": "domena\\\\login"
 }
