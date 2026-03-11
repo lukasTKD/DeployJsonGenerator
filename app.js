@@ -7,8 +7,105 @@ const App = (() => {
     // ========== STATE ==========
     const SERVERS = {
         haaTeamCity: 'https://haateamcity.mbank.pl/',
-        teamcity: 'https://teamcity.mbank.pl/'
+        teamcity: 'https://teamcity.mbank.pl/',
+        ferryt: 'https://teamcity.mbank.pl/'
     };
+
+    const SQL_RUNNER_BUILD_ID = 'TC_SQL';
+    const SCRIPT_RUNNER_BUILD_ID = 'TC_PowerShell';
+    const FERRYT_RENEW_PLACEHOLDER = 'Renew';
+    const FERRYT_RENEW_BUILD_ID = 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment';
+
+    const FERRYT_DEFAULTS = {
+        runat: '21:00',
+        email: 'hardcore@mbank.pl',
+        blackout: '"1680|Ferryt","1696|BPM ServicePoint"'
+    };
+
+    const FERRYT_BUILD_CATALOG = [
+        {
+            buildType: 'SQL',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_Sql_ProdDeployment',
+            artifactoryFolder: 'sql',
+            packageField: 'deploy_PackageName',
+            fields: [
+                { key: 'deploy_PackageName', label: 'deploy_PackageName', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'SVAutoImport',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_SVAutoImport_ProdDeployment',
+            artifactoryFolder: 'AutoImporter',
+            packageField: 'ImportProcessPackageName',
+            fields: [
+                { key: 'ImportProcessPackageName', label: 'ImportProcessPackageName', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'Restart serwisów',
+            buildId: 'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW',
+            fields: [
+                {
+                    key: 'todo',
+                    label: 'Akcja',
+                    required: true,
+                    type: 'select',
+                    defaultValue: 'Restart',
+                    options: [
+                        { value: 'Restart', label: 'restart' },
+                        { value: 'stop', label: 'stop' },
+                        { value: 'start', label: 'start' }
+                    ]
+                }
+            ]
+        },
+        {
+            buildType: 'BPM',
+            buildId: '',
+            fields: []
+        },
+        {
+            buildType: 'RenewApplication File',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment',
+            artifactoryFolder: 'RenewApplication',
+            packageField: 'RenewAppFileNameTC',
+            fields: [
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' },
+                { key: 'RenewAppTC', label: 'RenewAppTC', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'RenewApplication SQL',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment',
+            artifactoryFolder: 'sql',
+            packageField: 'RenewAppFileNameTC',
+            fields: [
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' },
+                { key: 'RenewAppSQLTC', label: 'RenewAppSQLTC', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'RenewApplication Scenario',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment',
+            fields: [
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' }
+            ]
+        }
+    ];
+
+    const FERRYT_RENEW_TYPES = [
+        'RenewApplication File',
+        'RenewApplication SQL',
+        'RenewApplication Scenario'
+    ];
+
+    const FERRYT_TOOLBAR_ITEMS = [
+        { label: 'SQL', buildType: 'SQL' },
+        { label: 'SVAutoImport', buildType: 'SVAutoImport' },
+        { label: 'Restart serwisów', buildType: 'Restart serwisów' },
+        { label: 'BPM', buildType: 'BPM' },
+        { label: 'Renew', buildType: FERRYT_RENEW_PLACEHOLDER }
+    ];
 
     let state = {
         currentServer: 'haaTeamCity',
@@ -17,16 +114,98 @@ const App = (() => {
         flowOrder: [],
         nodeCounter: 0,
         editingNodeId: null,
+        pendingNewNodeId: null,
         dragging: null,
         connecting: null
     };
 
     let currentUsername = '';
+    let editingFerrytType = '';
 
     function getStorageKey() {
         return currentUsername
             ? 'deployJsonGenerator_' + currentUsername
             : 'deployJsonGenerator';
+    }
+
+    function isFerrytServer(server = state.currentServer) {
+        return server === 'ferryt';
+    }
+
+    function getFerrytCatalogItem(buildType) {
+        return FERRYT_BUILD_CATALOG.find(item => item.buildType === buildType) || null;
+    }
+
+    function isFerrytRenewType(buildType) {
+        return buildType === FERRYT_RENEW_PLACEHOLDER || FERRYT_RENEW_TYPES.includes(buildType);
+    }
+
+    function getFerrytEffectiveType(buildType = editingFerrytType) {
+        if (!isFerrytRenewType(buildType)) {
+            return buildType || '';
+        }
+
+        return FERRYT_RENEW_TYPES.includes(editingFerrytType) ? editingFerrytType : '';
+    }
+
+    function applyFerrytFlowDefaults(flow) {
+        if (!flow || !isFerrytServer(flow.server)) return;
+        flow.runat = flow.runat || FERRYT_DEFAULTS.runat;
+        flow.email = flow.email || FERRYT_DEFAULTS.email;
+        flow.blackout = flow.blackout || FERRYT_DEFAULTS.blackout;
+        if (!flow.filename || !flow.filename.trim()) {
+            flow.filename = 'ferryt_deploy_' + ((state.flowOrder.indexOf(flow.id) + 1) || 1);
+        }
+    }
+
+    function normalizeFerrytNode(node) {
+        if (!node) return;
+
+        const params = sanitizeParams({ ...(node.params || {}) });
+        let ferrytType = node.ferrytType || '';
+
+        if (params.buildPropertyName) {
+            const dynamicKey = params.buildPropertyName;
+            if (params.buildPropertyValue) {
+                params[dynamicKey] = params.buildPropertyValue;
+            }
+            delete params.buildPropertyName;
+            delete params.buildPropertyValue;
+        }
+
+        if (params.renewAppTC) {
+            if (params.renewAppTC === 'RenewAppSQLTC' && !params.RenewAppSQLTC) {
+                params.RenewAppSQLTC = params.renewAppTC;
+            } else if (!params.RenewAppTC) {
+                params.RenewAppTC = params.renewAppTC;
+            }
+            delete params.renewAppTC;
+        }
+
+        if (!ferrytType) {
+            if ('deploy_PackageName' in params) {
+                ferrytType = 'SQL';
+            } else if ('ImportProcessPackageName' in params) {
+                ferrytType = 'SVAutoImport';
+            } else if ('todo' in params || node.buildid === 'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW') {
+                ferrytType = 'Restart serwisów';
+            } else if ('RenewAppFileNameTC' in params && 'RenewAppSQLTC' in params) {
+                ferrytType = 'RenewApplication SQL';
+            } else if ('RenewAppFileNameTC' in params && 'RenewAppTC' in params) {
+                ferrytType = 'RenewApplication File';
+            } else if ('RenewAppFileNameTC' in params) {
+                ferrytType = 'RenewApplication Scenario';
+            } else if (!node.buildid) {
+                ferrytType = 'BPM';
+            }
+        }
+
+        node.ferrytType = ferrytType;
+        if (Object.keys(params).length > 0) {
+            node.params = params;
+        } else {
+            delete node.params;
+        }
     }
 
     // ========== TIME OPTIONS (runat) ==========
@@ -59,14 +238,15 @@ const App = (() => {
 
     function addFlow() {
         const id = 'flow_' + Date.now();
+        const ferryt = isFerrytServer();
         state.flows[id] = {
             id,
-            filename: 'deploy_' + (state.flowOrder.length + 1),
+            filename: ferryt ? 'ferryt_deploy_' + (state.flowOrder.length + 1) : 'deploy_' + (state.flowOrder.length + 1),
             server: state.currentServer,
             enabled: 1,
-            runat: '18:00',
-            email: '',
-            blackout: '',
+            runat: ferryt ? FERRYT_DEFAULTS.runat : '18:00',
+            email: ferryt ? FERRYT_DEFAULTS.email : '',
+            blackout: ferryt ? FERRYT_DEFAULTS.blackout : '',
             sms: '',
             change: '',
             nodes: {},
@@ -180,6 +360,7 @@ const App = (() => {
         const flow = getCurrentFlow();
         if (!flow) return;
         flow[key] = value;
+        applyFerrytFlowDefaults(flow);
         if (key === 'filename') {
             renderFlowTabs();
             renderInterflowDeps();
@@ -202,6 +383,7 @@ const App = (() => {
             document.getElementById('flowEnabled').value = '1';
             return;
         }
+        applyFerrytFlowDefaults(flow);
         document.getElementById('flowFilename').value = flow.filename || '';
         document.getElementById('flowRunat').value = flow.runat || '';
         document.getElementById('flowWaitfor').value = getInterflowWaitforNames(flow).join(', ') || '';
@@ -227,23 +409,108 @@ const App = (() => {
         'TC_PowerShell': ['servers', 'file']
     };
 
+    function isSqlRunnerType(runnerType) {
+        return runnerType === 'sql';
+    }
+
+    function isScriptRunnerType(runnerType) {
+        return runnerType === 'script';
+    }
+
     function isTcSql(buildId) {
-        return buildId && buildId.toLowerCase() === 'tc_sql';
+        return buildId && buildId.toLowerCase() === SQL_RUNNER_BUILD_ID.toLowerCase();
     }
 
     function isTcPowerShell(buildId) {
-        return buildId && buildId.toLowerCase() === 'tc_powershell';
+        return buildId && buildId.toLowerCase() === SCRIPT_RUNNER_BUILD_ID.toLowerCase();
     }
 
-    function updateTcParamsVisibility(buildId) {
+    function sanitizeParams(params = {}) {
+        return Object.entries(params).reduce((result, [key, value]) => {
+            if (value === null || value === undefined) {
+                return result;
+            }
+
+            if (typeof value === 'string') {
+                const trimmedValue = value.trim();
+                if (!trimmedValue) {
+                    return result;
+                }
+                result[key] = trimmedValue;
+                return result;
+            }
+
+            result[key] = value;
+            return result;
+        }, {});
+    }
+
+    function getTcParamsFromModal(node) {
+        let fields = null;
+
+        if (isSqlRunnerType(node.runnerType) || isTcSql(node.buildid)) {
+            fields = [
+                { key: 'sqlserver', label: 'sqlserver', inputId: 'nodeEditSqlServer' },
+                { key: 'database', label: 'database', inputId: 'nodeEditDatabase' },
+                { key: 'file', label: 'file', inputId: 'nodeEditSqlFile' }
+            ];
+        } else if (isScriptRunnerType(node.runnerType) || isTcPowerShell(node.buildid)) {
+            fields = [
+                { key: 'servers', label: 'servers', inputId: 'nodeEditPsServers' },
+                { key: 'file', label: 'file', inputId: 'nodeEditPsFile' }
+            ];
+        }
+
+        if (!fields) {
+            return { params: null, missingFieldId: null, missingLabel: null };
+        }
+
+        const params = {};
+        for (const field of fields) {
+            const value = document.getElementById(field.inputId).value.trim();
+            if (!value) {
+                return { params: null, missingFieldId: field.inputId, missingLabel: field.label };
+            }
+            params[field.key] = value;
+        }
+
+        return { params, missingFieldId: null, missingLabel: null };
+    }
+
+    function nodeRequiresCompletedParams(node) {
+        if (!node) return false;
+
+        if (
+            isSqlRunnerType(node.runnerType) ||
+            isTcSql(node.buildid) ||
+            isScriptRunnerType(node.runnerType) ||
+            isTcPowerShell(node.buildid)
+        ) {
+            return true;
+        }
+
+        const ferrytType = node.ferrytType || '';
+        if (!isFerrytServer() || !ferrytType) {
+            return false;
+        }
+
+        if (isFerrytRenewType(ferrytType)) {
+            return true;
+        }
+
+        const item = getFerrytCatalogItem(ferrytType);
+        return !!(item && item.fields && item.fields.some(field => field.required));
+    }
+
+    function updateTcParamsVisibility(buildId, runnerType = '') {
         const sqlSection = document.getElementById('tcSqlParams');
         const psSection = document.getElementById('tcPowerShellParams');
-        sqlSection.style.display = isTcSql(buildId) ? '' : 'none';
-        psSection.style.display = isTcPowerShell(buildId) ? '' : 'none';
+        sqlSection.style.display = (isSqlRunnerType(runnerType) || isTcSql(buildId)) ? '' : 'none';
+        psSection.style.display = (isScriptRunnerType(runnerType) || isTcPowerShell(buildId)) ? '' : 'none';
     }
 
     function loadTcParams(node) {
-        const params = node.params || {};
+        const params = sanitizeParams(node.params || {});
         // TC_SQL fields
         document.getElementById('nodeEditSqlServer').value = params.sqlserver || '';
         document.getElementById('nodeEditDatabase').value = params.database || '';
@@ -253,22 +520,78 @@ const App = (() => {
         document.getElementById('nodeEditPsFile').value = params.file || '';
     }
 
-    function saveTcParams(node) {
-        const buildId = node.buildid;
-        if (isTcSql(buildId)) {
-            node.params = {
-                sqlserver: document.getElementById('nodeEditSqlServer').value.trim(),
-                database: document.getElementById('nodeEditDatabase').value.trim(),
-                file: document.getElementById('nodeEditSqlFile').value.trim()
-            };
-        } else if (isTcPowerShell(buildId)) {
-            node.params = {
-                servers: document.getElementById('nodeEditPsServers').value.trim(),
-                file: document.getElementById('nodeEditPsFile').value.trim()
-            };
+    function saveTcParams(node, paramsOverride = null) {
+        const tcParams = paramsOverride || getTcParamsFromModal(node).params;
+        if (tcParams && Object.keys(tcParams).length > 0) {
+            node.params = sanitizeParams(tcParams);
         } else {
             delete node.params;
         }
+    }
+
+    function renderFerrytParamsFields(buildType, params = {}) {
+        const section = document.getElementById('ferrytParams');
+        const container = document.getElementById('ferrytParamsFields');
+        const renewTypeGroup = document.getElementById('ferrytRenewTypeGroup');
+        const renewTypeSelect = document.getElementById('nodeEditFerrytRenewType');
+        if (!section || !container || !renewTypeGroup || !renewTypeSelect) return;
+
+        const effectiveType = getFerrytEffectiveType(buildType);
+        const item = getFerrytCatalogItem(effectiveType);
+        if (!isFerrytServer() || (!item && !isFerrytRenewType(buildType))) {
+            section.style.display = 'none';
+            renewTypeGroup.style.display = 'none';
+            renewTypeSelect.value = '';
+            container.innerHTML = '';
+            return;
+        }
+
+        section.style.display = '';
+        if (isFerrytRenewType(buildType)) {
+            renewTypeGroup.style.display = '';
+            renewTypeSelect.value = effectiveType || '';
+        } else {
+            renewTypeGroup.style.display = 'none';
+            renewTypeSelect.value = '';
+        }
+
+        if (!item || item.fields.length === 0) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = item.fields.map(field => {
+            const inputId = `nodeEditFerryt_${field.key}`;
+            const currentValue = params[field.key] || field.defaultValue || '';
+
+            if (field.type === 'select') {
+                const options = field.options.map(option => {
+                    const selected = currentValue === option.value ? 'selected' : '';
+                    return `<option value="${escapeHtml(option.value)}" ${selected}>${escapeHtml(option.label)}</option>`;
+                }).join('');
+
+                return `
+                    <div class="form-group">
+                        <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+                        <select id="${inputId}">
+                            ${options}
+                        </select>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="form-group">
+                    <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+                    <input type="text" id="${inputId}" value="${escapeHtml(currentValue)}" placeholder="${escapeHtml(field.label)}">
+                </div>
+            `;
+        }).join('');
+    }
+
+    function getFerrytParamsFromModal(buildType) {
+        const item = getFerrytCatalogItem(getFerrytEffectiveType(buildType));
+        return getFerrytParamsFromInputs(item, field => document.getElementById(`nodeEditFerryt_${field.key}`));
     }
 
     // ========== VALIDATORS ==========
@@ -280,8 +603,10 @@ const App = (() => {
         return duplicate ? `Nazwa "${name}" już istnieje w tym flow` : null;
     }
 
-    function validateBuildId(flow, buildid, excludeNodeId) {
+    function validateBuildId(flow, buildid, excludeNodeId, allowDuplicate = false) {
         if (!buildid) return null; // empty is allowed (placeholder used)
+        if (isFerrytServer(flow.server)) return null;
+        if (allowDuplicate) return null;
         // TC_SQL and TC_PowerShell can be duplicated (same buildid, different name)
         if (isTcSql(buildid) || isTcPowerShell(buildid)) return null;
         const duplicate = Object.values(flow.nodes).find(
@@ -335,14 +660,17 @@ const App = (() => {
             retry: config.retry ?? '1',
             external: config.external || '',
             stop: config.stop || '',
+            ferrytType: config.ferrytType || '',
+            runnerType: config.runnerType || '',
             x: position.x,
             y: position.y,
-            params: config.params && Object.keys(config.params).length > 0 ? { ...config.params } : undefined
+            params: config.params && Object.keys(sanitizeParams(config.params)).length > 0 ? sanitizeParams(config.params) : undefined
         };
 
         renderCanvas();
         updateJsonPreview();
         expandCanvasIfNeeded();
+        renderFerrytToolbarButtons();
         return nodeId;
     }
 
@@ -350,28 +678,48 @@ const App = (() => {
         addNodeWithConfig();
     }
 
-    function addRunnerNode(buildId, baseName) {
+    function addRunnerNode(buildId, baseName, runnerType) {
         const flow = getCurrentFlow();
         if (!flow) return;
 
         const nodeId = addNodeWithConfig({
             name: getUniqueNodeName(flow, baseName),
-            buildid: buildId
+            buildid: buildId,
+            runnerType
         });
 
         if (nodeId) {
+            state.pendingNewNodeId = nodeId;
             openNodeModal(nodeId);
         }
     }
 
+    function discardPendingNode(nodeId) {
+        const flow = getCurrentFlow();
+        if (!flow || !nodeId || !flow.nodes[nodeId]) return;
+
+        const deletedName = flow.nodes[nodeId].name;
+        flow.connections = flow.connections.filter(
+            c => c.from !== nodeId && c.to !== nodeId
+        );
+        Object.values(flow.nodes).forEach(n => {
+            if (n.waitfor === deletedName) n.waitfor = '';
+        });
+        delete flow.nodes[nodeId];
+        renderCanvas();
+        updateJsonPreview();
+        renderFerrytToolbarButtons();
+        saveState();
+    }
+
     function addSqlRunner() {
         if (state.currentServer !== 'haaTeamCity') return;
-        addRunnerNode('TC_SQL', 'SQLRunner');
+        addRunnerNode(SQL_RUNNER_BUILD_ID, 'SQLRunner', 'sql');
     }
 
     function addScriptRunner() {
         if (state.currentServer !== 'haaTeamCity') return;
-        addRunnerNode('TC_PowerShell', 'ScriptRunner');
+        addRunnerNode(SCRIPT_RUNNER_BUILD_ID, 'ScriptRunner', 'script');
     }
 
     function deleteNode() {
@@ -391,6 +739,7 @@ const App = (() => {
         closeNodeModal();
         renderCanvas();
         updateJsonPreview();
+        renderFerrytToolbarButtons();
     }
 
     // ========== CANVAS RENDERING ==========
@@ -652,6 +1001,10 @@ const App = (() => {
         if (!flow || !flow.nodes[nodeId]) return;
         state.editingNodeId = nodeId;
         const node = flow.nodes[nodeId];
+        if (isFerrytServer()) {
+            normalizeFerrytNode(node);
+            editingFerrytType = node.ferrytType || '';
+        }
 
         document.getElementById('nodeEditName').value = node.name || '';
         document.getElementById('nodeEditBuildId').value = node.buildid || '';
@@ -662,13 +1015,14 @@ const App = (() => {
         document.getElementById('nodeEditStop').value = node.stop || '';
 
         // Show/hide TC params and load values
-        updateTcParamsVisibility(node.buildid || '');
+        updateTcParamsVisibility(node.buildid || '', node.runnerType || '');
         loadTcParams(node);
+        renderFerrytParamsFields(node.ferrytType, node.params || {});
 
         // Listen for buildid changes to toggle TC params
         const buildIdInput = document.getElementById('nodeEditBuildId');
         buildIdInput.oninput = function() {
-            updateTcParamsVisibility(this.value.trim());
+            updateTcParamsVisibility(this.value.trim(), node.runnerType || '');
         };
 
         // Clear previous validation messages
@@ -678,8 +1032,32 @@ const App = (() => {
     }
 
     function closeNodeModal() {
+        const nodeId = state.editingNodeId;
+        const flow = getCurrentFlow();
+        const shouldDiscardPendingNode =
+            nodeId &&
+            state.pendingNewNodeId === nodeId &&
+            flow &&
+            flow.nodes[nodeId] &&
+            nodeRequiresCompletedParams(flow.nodes[nodeId]);
+
         document.getElementById('nodeEditModal').style.display = 'none';
         state.editingNodeId = null;
+        editingFerrytType = '';
+        if (shouldDiscardPendingNode) {
+            state.pendingNewNodeId = null;
+            discardPendingNode(nodeId);
+            return;
+        }
+        if (state.pendingNewNodeId === nodeId) {
+            state.pendingNewNodeId = null;
+        }
+    }
+
+    function handleFerrytRenewTypeChange(value) {
+        editingFerrytType = value || FERRYT_RENEW_PLACEHOLDER;
+        renderFerrytParamsFields(editingFerrytType, {});
+        clearValidation();
     }
 
     function saveNodeEdit() {
@@ -698,9 +1076,37 @@ const App = (() => {
         }
 
         // Validate buildid uniqueness
-        const buildIdError = validateBuildId(flow, newBuildId, state.editingNodeId);
+        const buildIdError = validateBuildId(
+            flow,
+            newBuildId,
+            state.editingNodeId,
+            isSqlRunnerType(node.runnerType) || isScriptRunnerType(node.runnerType)
+        );
         if (buildIdError) {
             showValidationError('nodeEditBuildId', buildIdError);
+            return;
+        }
+
+        const activeFerrytType = isFerrytServer() ? getFerrytEffectiveType(node.ferrytType) : '';
+        if (isFerrytServer() && isFerrytRenewType(node.ferrytType) && !activeFerrytType) {
+            showValidationError('nodeEditFerrytRenewType', 'Wybierz typ Renew');
+            return;
+        }
+
+        if (isFerrytServer() && activeFerrytType) {
+            const ferrytValidation = getFerrytParamsFromModal(activeFerrytType);
+            if (ferrytValidation.missingLabel) {
+                showValidationError(ferrytValidation.missingFieldId, `Uzupełnij ${ferrytValidation.missingLabel}`);
+                return;
+            }
+        }
+
+        const tcValidation = getTcParamsFromModal({
+            ...node,
+            buildid: newBuildId
+        });
+        if (tcValidation.missingLabel) {
+            showValidationError(tcValidation.missingFieldId, `Uzupełnij ${tcValidation.missingLabel}`);
             return;
         }
 
@@ -710,9 +1116,22 @@ const App = (() => {
         node.retry = document.getElementById('nodeEditRetry').value.trim();
         node.external = document.getElementById('nodeEditExternal').value.trim();
         node.stop = document.getElementById('nodeEditStop').value.trim();
+        if (isFerrytServer()) {
+            node.ferrytType = activeFerrytType;
+        }
 
         // Save TC params
-        saveTcParams(node);
+        saveTcParams(node, tcValidation.params);
+        if (isFerrytServer() && activeFerrytType) {
+            const ferrytParams = sanitizeParams(getFerrytParamsFromModal(activeFerrytType).params);
+            if (Object.keys(ferrytParams).length > 0) {
+                node.params = ferrytParams;
+            } else {
+                delete node.params;
+            }
+        } else if (isFerrytServer()) {
+            delete node.params;
+        }
 
         // Update waitfor references if name changed
         if (oldName !== newName) {
@@ -721,14 +1140,20 @@ const App = (() => {
             });
         }
 
+        state.pendingNewNodeId = null;
         closeNodeModal();
         renderCanvas();
         updateJsonPreview();
+        renderFerrytToolbarButtons();
     }
 
     function showValidationError(inputId, message) {
         clearValidation();
         const input = document.getElementById(inputId);
+        if (!input) {
+            showToast(message, 'error');
+            return;
+        }
         input.classList.add('validation-error');
         const msg = document.createElement('div');
         msg.className = 'validation-msg';
@@ -815,6 +1240,7 @@ const App = (() => {
         flow.connections = [];
         renderCanvas();
         updateJsonPreview();
+        renderFerrytToolbarButtons();
     }
 
     // ========== JSON GENERATION ==========
@@ -838,7 +1264,7 @@ const App = (() => {
 
         // Optional root-level fields
         if (flow.email) json.email = flow.email;
-        if (flow.blackout) json.blackout = flow.blackout;
+        if (flow.blackout) json.blackout = parseBlackoutValue(flow.blackout);
         if (flow.sms) json.sms = flow.sms;
         if (flow.change) json.change = flow.change;
 
@@ -854,8 +1280,9 @@ const App = (() => {
             if (node.external) build.external = node.external;
             if (node.stop) build.stop = node.stop;
             // TC params
-            if (node.params && Object.keys(node.params).length > 0) {
-                build.params = { ...node.params };
+            const sanitizedParams = sanitizeParams(node.params || {});
+            if (Object.keys(sanitizedParams).length > 0) {
+                build.params = sanitizedParams;
             }
             json.builds[node.name] = build;
         });
@@ -903,6 +1330,19 @@ const App = (() => {
         return JSON.stringify(obj, null, 4);
     }
 
+    function parseBlackoutValue(value) {
+        if (!value) return '';
+
+        const parts = value
+            .split(',')
+            .map(item => item.trim().replace(/^"(.*)"$/, '$1'))
+            .filter(Boolean);
+
+        if (parts.length === 0) return '';
+        if (parts.length === 1) return parts[0];
+        return parts;
+    }
+
     function updateJsonPreview() {
         const flow = getCurrentFlow();
         const preview = document.getElementById('jsonPreview');
@@ -946,6 +1386,7 @@ const App = (() => {
     function renderCurrentFlow() {
         loadFlowSettings();
         renderCanvas();
+        renderFerrytToolbarButtons();
         renderInterflowDeps();
     }
 
@@ -1087,6 +1528,33 @@ const App = (() => {
         return div.innerHTML;
     }
 
+    function extractBuildIdFromInput(value) {
+        const trimmedValue = (value || '').trim();
+        if (!trimmedValue) {
+            return '';
+        }
+
+        const withoutHashOrQuery = trimmedValue.split('#')[0].split('?')[0].trim();
+        const pathParts = withoutHashOrQuery
+            .split('/')
+            .map(part => part.trim())
+            .filter(Boolean);
+
+        const markerIndex = pathParts.findIndex(part => /^buildConfigur(?:ation|adion)$/i.test(part));
+        if (markerIndex !== -1 && pathParts[markerIndex + 1]) {
+            return decodeURIComponent(pathParts[markerIndex + 1]).trim();
+        }
+
+        return withoutHashOrQuery;
+    }
+
+    function parseBuildListInput(value) {
+        return value
+            .split('\n')
+            .map(line => extractBuildIdFromInput(line))
+            .filter(line => line.length > 0);
+    }
+
     function showToast(message, type) {
         const toast = document.createElement('div');
         toast.className = `toast ${type || 'info'}`;
@@ -1143,6 +1611,10 @@ const App = (() => {
                     }
 
                     delete flow.waitfor;
+                    applyFerrytFlowDefaults(flow);
+                    if (isFerrytServer(flow.server)) {
+                        Object.values(flow.nodes || {}).forEach(normalizeFerrytNode);
+                    }
                 });
 
                 return true;
@@ -1188,7 +1660,7 @@ const App = (() => {
         }
         if (!flow) return;
         const textarea = document.getElementById('bulkBuildList');
-        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = parseBuildListInput(textarea.value);
 
         if (lines.length === 0) {
             showToast('Wklej przynajmniej jedną nazwę builda', 'error');
@@ -1258,10 +1730,250 @@ const App = (() => {
 
     function updateServerSpecificUI() {
         const isHaaTeamCity = state.currentServer === 'haaTeamCity';
+        const ferryt = isFerrytServer();
+        const genericAddBtn = document.getElementById('btnAddNodeGeneric');
         const sqlRunnerBtn = document.getElementById('btnAddSqlRunner');
         const scriptRunnerBtn = document.getElementById('btnAddScriptRunner');
+        const validateFerrytBtn = document.getElementById('btnValidateFerryt');
+        const ferrytToolbar = document.getElementById('ferrytToolbarActions');
+        if (genericAddBtn) genericAddBtn.style.display = ferryt ? 'none' : '';
         if (sqlRunnerBtn) sqlRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
         if (scriptRunnerBtn) scriptRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
+        if (validateFerrytBtn) validateFerrytBtn.style.display = ferryt ? '' : 'none';
+        if (ferrytToolbar) ferrytToolbar.style.display = ferryt ? 'flex' : 'none';
+    }
+
+    function getFerrytParamsFromInputs(item, getInput) {
+        if (!item) {
+            return { params: {}, missingFieldId: null, missingLabel: null };
+        }
+
+        const params = {};
+        for (const field of item.fields) {
+            const input = getInput(field);
+            const value = input ? input.value.trim() : '';
+            const finalValue = value || field.defaultValue || '';
+
+            if (field.required && !finalValue) {
+                return {
+                    params: {},
+                    missingFieldId: input ? input.id : null,
+                    missingLabel: field.label
+                };
+            }
+
+            if (finalValue) {
+                params[field.key] = finalValue;
+            }
+        }
+
+        return { params, missingFieldId: null, missingLabel: null };
+    }
+
+    function renderFerrytToolbarButtons() {
+        const container = document.getElementById('ferrytToolbarActions');
+        const flow = getCurrentFlow();
+
+        if (!container) return;
+        if (!flow || !isFerrytServer()) {
+            container.style.display = 'none';
+            container.innerHTML = '';
+            return;
+        }
+
+        container.style.display = 'flex';
+        container.innerHTML = FERRYT_TOOLBAR_ITEMS.map(item =>
+            `<button class="btn btn-secondary ferryt-toolbar-btn" onclick="App.addFerrytBuild('${escapeHtml(item.buildType)}')">+ ${escapeHtml(item.label)}</button>`
+        ).join('');
+    }
+
+    function addFerrytBuild(buildType) {
+        const flow = getCurrentFlow();
+        if (!flow || !isFerrytServer()) return;
+
+        const item = buildType === FERRYT_RENEW_PLACEHOLDER
+            ? { buildType: FERRYT_RENEW_PLACEHOLDER, buildId: FERRYT_RENEW_BUILD_ID }
+            : getFerrytCatalogItem(buildType);
+        if (!item) return;
+        const nodeId = addNodeWithConfig({
+            name: getUniqueNodeName(flow, buildType === FERRYT_RENEW_PLACEHOLDER ? 'Renew' : item.buildType),
+            buildid: item.buildId,
+            ferrytType: item.buildType,
+            params: {}
+        });
+
+        if (!nodeId) return;
+
+        if (nodeRequiresCompletedParams(flow.nodes[nodeId])) {
+            state.pendingNewNodeId = nodeId;
+        }
+        openNodeModal(nodeId);
+    }
+
+    function collectFerrytValidationPayload(flow) {
+        const packages = [];
+        const skipped = [];
+
+        Object.values(flow.nodes).forEach(node => {
+            normalizeFerrytNode(node);
+            const item = getFerrytCatalogItem(node.ferrytType);
+            if (!item || !item.artifactoryFolder || !item.packageField) {
+                skipped.push({
+                    nodeName: node.name,
+                    buildType: node.ferrytType || '',
+                    reason: 'Typ buildu nie wymaga sprawdzania w Artifactory'
+                });
+                return;
+            }
+
+            const packageName = ((node.params || {})[item.packageField] || '').trim();
+            if (!packageName) {
+                skipped.push({
+                    nodeName: node.name,
+                    buildType: node.ferrytType || '',
+                    reason: `Brak wartości ${item.packageField}`
+                });
+                return;
+            }
+
+            packages.push({
+                nodeName: node.name,
+                buildType: item.buildType,
+                folder: item.artifactoryFolder,
+                package: packageName
+            });
+        });
+
+        return { packages, skipped };
+    }
+
+    function setFerrytValidationBusy(isBusy) {
+        const button = document.getElementById('btnValidateFerryt');
+        if (!button) return;
+        button.disabled = isBusy;
+        button.textContent = isBusy ? 'Validate...' : 'Validate';
+    }
+
+    function closeValidationResult() {
+        const modal = document.getElementById('validationResultModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function renderValidationResult(result, localSkipped = []) {
+        const modal = document.getElementById('validationResultModal');
+        const body = document.getElementById('validationResultBody');
+        if (!modal || !body) return;
+
+        const missing = Array.isArray(result.missing) ? result.missing : [];
+        const found = Array.isArray(result.found) ? result.found : [];
+        const skipped = [...(Array.isArray(result.skipped) ? result.skipped : []), ...localSkipped];
+        const error = result.error ? `<div class="validation-summary validation-summary-error">${escapeHtml(result.error)}</div>` : '';
+
+        const renderRows = items => items.map(item => `
+            <div class="validation-row">
+                <div class="validation-main">
+                    <strong>${escapeHtml(item.nodeName || item.buildType || 'Build')}</strong>
+                    <span>${escapeHtml(item.package || item.reason || '')}</span>
+                </div>
+                <div class="validation-meta">
+                    ${item.folder ? `<span>${escapeHtml(item.folder)}</span>` : ''}
+                    ${item.reason ? `<span>${escapeHtml(item.reason)}</span>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        body.innerHTML = `
+            ${error}
+            <div class="validation-summary-grid">
+                <div class="validation-summary"><strong>Znalezione:</strong> ${found.length}</div>
+                <div class="validation-summary validation-summary-missing"><strong>Brakujące:</strong> ${missing.length}</div>
+                <div class="validation-summary"><strong>Pominięte:</strong> ${skipped.length}</div>
+            </div>
+            <div class="validation-section">
+                <h4>Znalezione</h4>
+                ${found.length > 0 ? renderRows(found) : '<div class="validation-empty">Brak</div>'}
+            </div>
+            <div class="validation-section">
+                <h4>Brakujące</h4>
+                ${missing.length > 0 ? renderRows(missing) : '<div class="validation-empty">Brak</div>'}
+            </div>
+            <div class="validation-section">
+                <h4>Pominięte</h4>
+                ${skipped.length > 0 ? renderRows(skipped) : '<div class="validation-empty">Brak</div>'}
+            </div>
+        `;
+
+        modal.style.display = 'flex';
+    }
+
+    async function validateFerrytPackages() {
+        const flow = getCurrentFlow();
+        if (!flow || !isFerrytServer()) return;
+
+        const validation = collectFerrytValidationPayload(flow);
+        if (validation.packages.length === 0) {
+            showToast('Brak buildów Ferryt do sprawdzenia w Artifactory', 'error');
+            return;
+        }
+
+        setFerrytValidationBusy(true);
+        try {
+            const response = await fetch('validate-artifactory.aspx', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    flowName: flow.filename || '',
+                    change: flow.change || '',
+                    packages: validation.packages
+                })
+            });
+
+            const data = await parseValidationResponse(response);
+            renderValidationResult(data, validation.skipped);
+
+            if (!response.ok || data.ok === false) {
+                showToast(data.error || 'Walidacja Artifactory zakończona błędem', 'error');
+                return;
+            }
+
+            if (Array.isArray(data.missing) && data.missing.length > 0) {
+                showToast(`Brakuje ${data.missing.length} paczek w Artifactory`, 'error');
+                return;
+            }
+
+            showToast('Wszystkie paczki są dostępne w Artifactory', 'success');
+        } catch (error) {
+            renderValidationResult({ ok: false, error: error.message || 'Nie udało się wykonać walidacji.' }, validation.skipped);
+            showToast(error.message || 'Nie udało się połączyć z walidacją Artifactory', 'error');
+        } finally {
+            setFerrytValidationBusy(false);
+        }
+    }
+
+    async function parseValidationResponse(response) {
+        const raw = await response.text();
+        if (!raw) {
+            return {
+                ok: response.ok
+            };
+        }
+
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            const normalized = raw
+                .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+                .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+                .replace(/<[^>]+>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            const snippet = normalized ? normalized.slice(0, 220) : raw.slice(0, 220).trim();
+            const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+            throw new Error(`Serwer zwrocil niepoprawny JSON (${status}). ${snippet || 'Brak tresci odpowiedzi.'}`);
+        }
     }
 
     // ========== EXTERNA MODE ==========
@@ -1295,13 +2007,13 @@ const App = (() => {
 
     function updateExternaBuildCount() {
         const textarea = document.getElementById('externaBuildList');
-        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = parseBuildListInput(textarea.value);
         document.getElementById('externaBuildCount').textContent = `${lines.length} buildów`;
     }
 
     function generateExterna() {
         const textarea = document.getElementById('externaBuildList');
-        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = parseBuildListInput(textarea.value);
 
         if (lines.length === 0) {
             showToast('Wklej przynajmniej jedną nazwę builda', 'error');
@@ -1373,6 +2085,7 @@ const App = (() => {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeNodeModal();
             if (e.key === 'Escape') closeBulkDrawer();
+            if (e.key === 'Escape') closeValidationResult();
             if (e.key === 'Delete' && state.editingNodeId) deleteNode();
         });
     }
@@ -1441,10 +2154,14 @@ const App = (() => {
         generateExterna,
         copyExternaJson,
         downloadExternaJson,
+        handleFerrytRenewTypeChange,
         bulkAddBuilds: withSave(bulkAddBuilds),
         toggleInterflowDep: withSave(toggleInterflowDep),
         toggleBulkDrawer,
         closeBulkDrawer,
+        addFerrytBuild: withSave(addFerrytBuild),
+        validateFerrytPackages,
+        closeValidationResult,
         addSqlRunner: withSave(addSqlRunner),
         addScriptRunner: withSave(addScriptRunner)
     };

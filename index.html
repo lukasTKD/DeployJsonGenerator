@@ -42,6 +42,7 @@
             <div class="tabs-wrapper">
                 <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity.mbank.pl</button>
                 <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
+                <button class="tab" data-server="ferryt" onclick="App.switchServer('ferryt')">Ferryt</button>
             </div>
         </div>
 
@@ -107,11 +108,15 @@
                     <div class="canvas-toolbar">
                         <h3 class="section-title">Diagram Flow</h3>
                         <div class="toolbar-actions">
-                            <button class="btn btn-primary" onclick="App.addNode()">+ Dodaj Build</button>
+                            <button class="btn btn-primary" id="btnAddNodeGeneric" onclick="App.addNode()">+ Dodaj Build</button>
                             <button class="btn btn-secondary" id="btnAddSqlRunner" onclick="App.addSqlRunner()" style="display:none">+ Dodaj SQLRunner</button>
                             <button class="btn btn-secondary" id="btnAddScriptRunner" onclick="App.addScriptRunner()" style="display:none">+ Dodaj ScriptRunner</button>
-                            <button class="btn btn-secondary" onclick="App.autoLayout()">Auto Layout</button>
-                            <button class="btn btn-danger" onclick="App.clearCanvas()">Wyczyść</button>
+                            <div class="ferryt-toolbar-actions" id="ferrytToolbarActions" style="display:none;">
+                                <!-- Generated dynamically -->
+                            </div>
+                            <button class="btn btn-secondary" id="btnValidateFerryt" onclick="App.validateFerrytPackages()" style="display:none">Validate</button>
+                            <button class="btn btn-secondary" id="btnAutoLayout" onclick="App.autoLayout()">Auto Layout</button>
+                            <button class="btn btn-danger" id="btnClearCanvas" onclick="App.clearCanvas()">Wyczyść</button>
                         </div>
                     </div>
                     <div class="canvas-info">
@@ -173,8 +178,8 @@
                     <h3 class="section-title">Szybkie dodawanie buildów</h3>
                     <button class="bulk-drawer-close" onclick="App.closeBulkDrawer()" title="Zamknij">&times;</button>
                 </div>
-                <p class="bulk-drawer-desc">Wklej listę nazw buildów (jeden na linię). Buildy zostaną dodane do bieżącego flow.</p>
-                <textarea id="bulkBuildList" class="externa-textarea" rows="14" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3"></textarea>
+                <p class="bulk-drawer-desc">Wklej listę nazw buildów lub pełne linki TeamCity (jeden wpis na linię). Buildy zostaną dodane do bieżącego flow.</p>
+                <textarea id="bulkBuildList" class="externa-textarea" rows="14" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects"></textarea>
                 <div class="bulk-drawer-actions">
                     <button class="btn btn-primary" onclick="App.bulkAddBuilds()">Dodaj buildy</button>
                     <button class="btn btn-secondary" onclick="App.closeBulkDrawer()">Zamknij</button>
@@ -187,7 +192,7 @@
             <div class="externa-layout">
                 <div class="externa-panel card">
                     <h3 class="section-title">Generator Externa</h3>
-                    <p class="externa-desc">Wklej listę nazw buildów (każdy w nowej linii) i wygeneruj plik JSON z externa: 1</p>
+                    <p class="externa-desc">Wklej listę nazw buildów lub pełne linki TeamCity (każdy w nowej linii) i wygeneruj plik JSON z externa: 1</p>
 
                     <div class="externa-settings">
                         <div class="form-group">
@@ -195,6 +200,7 @@
                             <select id="externaServer">
                                 <option value="haaTeamCity">haaTeamCity.mbank.pl (https://haateamcity.mbank.pl)</option>
                                 <option value="teamcity">TeamCity.mbank.pl (https://teamcity.mbank.pl)</option>
+                                <option value="ferryt">Ferryt (https://teamcity.mbank.pl)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -215,7 +221,7 @@
 
                     <div class="form-group" style="margin-top:8px; flex:1; display:flex; flex-direction:column;">
                         <label>Lista buildów (jeden na linię)</label>
-                        <textarea id="externaBuildList" class="externa-textarea" rows="12" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3&#10;..."></textarea>
+                        <textarea id="externaBuildList" class="externa-textarea" rows="12" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects&#10;..."></textarea>
                     </div>
 
                     <div class="externa-actions">
@@ -307,10 +313,39 @@
                         <input type="text" id="nodeEditPsFile" placeholder="np. deploy.ps1">
                     </div>
                 </div>
+
+                <div id="ferrytParams" class="tc-params-section" style="display:none;">
+                    <div class="tc-params-header">Parametry Ferryt</div>
+                    <div class="form-group" id="ferrytRenewTypeGroup" style="display:none;">
+                        <label>Renew Type *</label>
+                        <select id="nodeEditFerrytRenewType" onchange="App.handleFerrytRenewTypeChange(this.value)">
+                            <option value="">-- wybierz --</option>
+                            <option value="RenewApplication File">File</option>
+                            <option value="RenewApplication SQL">SQL</option>
+                            <option value="RenewApplication Scenario">Scenario</option>
+                        </select>
+                    </div>
+                    <div id="ferrytParamsFields"></div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-danger" onclick="App.deleteNode()">Usuń Build</button>
                 <button class="btn btn-primary" onclick="App.saveNodeEdit()">Zapisz</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="validationResultModal" style="display:none;">
+        <div class="modal-box" style="width:860px;">
+            <div class="modal-header">
+                <h3>Walidacja Artifactory</h3>
+                <button class="modal-close" onclick="App.closeValidationResult()">&times;</button>
+            </div>
+            <div class="modal-body" id="validationResultBody">
+                <!-- Generated dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="App.closeValidationResult()">Zamknij</button>
             </div>
         </div>
     </div>
