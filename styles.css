@@ -453,6 +453,8 @@ body {
 .toolbar-actions {
     display: flex;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .canvas-info {
@@ -1070,118 +1072,6 @@ body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-}
-
-/* Build Catalog (Ferryt) */
-.catalog-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    background: #f8f9fa;
-    border-radius: 6px;
-    border: 1px solid #eee;
-    flex-wrap: wrap;
-}
-
-.catalog-item-info {
-    flex: 1;
-    min-width: 180px;
-}
-
-.catalog-item-type {
-    font-weight: 600;
-    font-size: 13px;
-    color: #333;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.catalog-item-id {
-    font-family: 'Consolas', 'Monaco', monospace;
-    font-size: 11px;
-    color: #666;
-    margin-top: 2px;
-    word-break: break-all;
-}
-
-.catalog-item-detail {
-    font-size: 10px;
-    color: #999;
-    margin-top: 2px;
-}
-
-.catalog-count-badge {
-    font-size: 11px;
-    font-weight: 500;
-    color: #fff;
-    background: #E60000;
-    padding: 1px 8px;
-    border-radius: 10px;
-}
-
-.catalog-param {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex: 1;
-    min-width: 200px;
-}
-
-.catalog-param label {
-    font-size: 11px;
-    font-weight: 600;
-    color: #666;
-    white-space: nowrap;
-}
-
-.catalog-param-input {
-    padding: 6px 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 12px;
-    font-family: 'Consolas', 'Monaco', monospace;
-    flex: 1;
-    min-width: 120px;
-}
-
-.catalog-param-input:focus {
-    outline: none;
-    border-color: #E60000;
-    box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.2);
-}
-
-.catalog-add-btn {
-    flex-shrink: 0;
-}
-
-.catalog-hint {
-    font-size: 11px;
-    color: #999;
-    flex: 1;
-}
-
-#btnBuildCatalog {
-    background: #ff6600;
-    color: #fff;
-    border: none;
-}
-
-#btnBuildCatalog:hover {
-    background: #e55c00;
-    box-shadow: 0 2px 6px rgba(255, 102, 0, 0.3);
-}
-
-#btnValidateArtifactory {
-    background: #1565c0;
-    color: #fff;
-    border: none;
-}
-
-#btnValidateArtifactory:hover {
-    background: #0d47a1;
-    box-shadow: 0 2px 6px rgba(21, 101, 192, 0.3);
 }
 
 /* Responsive */

@@ -42,7 +42,6 @@
             <div class="tabs-wrapper">
                 <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity.mbank.pl</button>
                 <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
-                <button class="tab" data-server="ferryt" onclick="App.switchServer('ferryt')">Ferryt</button>
             </div>
         </div>
 
@@ -109,8 +108,8 @@
                         <h3 class="section-title">Diagram Flow</h3>
                         <div class="toolbar-actions">
                             <button class="btn btn-primary" onclick="App.addNode()">+ Dodaj Build</button>
-                            <button class="btn btn-secondary" id="btnBuildCatalog" onclick="App.openBuildCatalog()" style="display:none">Katalog Ferryt</button>
-                            <button class="btn btn-secondary" id="btnValidateArtifactory" onclick="App.validateArtifactory()" style="display:none">Validate Artifactory</button>
+                            <button class="btn btn-secondary" id="btnAddSqlRunner" onclick="App.addSqlRunner()" style="display:none">+ Dodaj SQLRunner</button>
+                            <button class="btn btn-secondary" id="btnAddScriptRunner" onclick="App.addScriptRunner()" style="display:none">+ Dodaj ScriptRunner</button>
                             <button class="btn btn-secondary" onclick="App.autoLayout()">Auto Layout</button>
                             <button class="btn btn-danger" onclick="App.clearCanvas()">Wyczyść</button>
                         </div>
@@ -186,7 +185,6 @@
                             <select id="externaServer">
                                 <option value="haaTeamCity">haaTeamCity.mbank.pl (https://haateamcity.mbank.pl)</option>
                                 <option value="teamcity">TeamCity.mbank.pl (https://teamcity.mbank.pl)</option>
-                                <option value="ferryt">Ferryt (https://teamcity.mbank.pl)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -229,23 +227,6 @@
             </div>
         </div><!-- /externaMode -->
     </div><!-- /container -->
-
-    <!-- Build Catalog Modal (Ferryt) -->
-    <div class="modal-overlay" id="buildCatalogModal" style="display:none;">
-        <div class="modal-box" style="width:700px;">
-            <div class="modal-header">
-                <h3>Katalog Buildów Ferryt</h3>
-                <button class="modal-close" onclick="App.closeBuildCatalog()">&times;</button>
-            </div>
-            <div class="modal-body" id="catalogBuildList">
-                <!-- Generated dynamically -->
-            </div>
-            <div class="modal-footer">
-                <span class="catalog-hint">Kliknij "Dodaj" przy wybranym buildzie. Możesz dodać ten sam typ wielokrotnie.</span>
-                <button class="btn btn-secondary" onclick="App.closeBuildCatalog()">Zamknij</button>
-            </div>
-        </div>
-    </div>
 
     <!-- Node Edit Modal -->
     <div class="modal-overlay" id="nodeEditModal" style="display:none;">
@@ -314,27 +295,6 @@
                     <div class="form-group">
                         <label>file</label>
                         <input type="text" id="nodeEditPsFile" placeholder="np. deploy.ps1">
-                    </div>
-                </div>
-
-                <!-- Ferryt params -->
-                <div id="ferrytParams" class="tc-params-section" style="display:none;">
-                    <div class="tc-params-header">Parametry Ferryt</div>
-                    <div class="form-group">
-                        <label>buildPropertyName</label>
-                        <input type="text" id="nodeEditBuildPropertyName" placeholder="np. deploy_PackageName">
-                    </div>
-                    <div class="form-group">
-                        <label>buildPropertyValue (nazwa paczki)</label>
-                        <input type="text" id="nodeEditBuildPropertyValue" placeholder="Wpisz nazwę paczki">
-                    </div>
-                    <div class="form-group">
-                        <label>artifactoryFolder</label>
-                        <input type="text" id="nodeEditArtifactoryFolder" placeholder="np. sql">
-                    </div>
-                    <div class="form-group">
-                        <label>renewAppTC</label>
-                        <input type="text" id="nodeEditRenewAppTC" placeholder="Opcjonalne">
                     </div>
                 </div>
             </div>

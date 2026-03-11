@@ -6,25 +6,8 @@
 const App = (() => {
     // ========== STATE ==========
     const SERVERS = {
-        haaTeamCity: 'https://haateamcity.mbank.pl',
-        teamcity: 'https://teamcity.mbank.pl',
-        ferryt: 'https://teamcity.mbank.pl'
-    };
-
-    const FERRYT_BUILD_CATALOG = [
-        { buildType: 'SQL', buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_Sql_ProdDeployment', buildPropertyName: 'deploy_PackageName', artifactoryFolder: 'sql' },
-        { buildType: 'SVAutoImport', buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_SVAutoImport_ProdDeployment', buildPropertyName: 'ImportProcessPackageName', artifactoryFolder: 'AutoImporter' },
-        { buildType: 'Restart serwisow', buildId: 'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW', buildPropertyName: 'todo', buildPropertyValue: 'Restart' },
-        { buildType: 'RenewApplication Scenario', buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment', buildPropertyName: 'RenewAppFileNameTC' },
-        { buildType: 'RenewApplication File', buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment', buildPropertyName: 'RenewAppFileNameTC', artifactoryFolder: 'RenewApplication', renewAppTC: 'RenewAppManualTC' },
-        { buildType: 'RenewApplication SQL', buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment', buildPropertyName: 'RenewAppFileNameTC', artifactoryFolder: 'sql', renewAppTC: 'RenewAppSQLTC' },
-        { buildType: 'BPM', buildId: '', buildPropertyName: '' }
-    ];
-
-    const FERRYT_DEFAULTS = {
-        runat: '21:00',
-        blackout: '1680|Ferryt,1696|BPM service',
-        email: 'hardcore@mbank.pl'
+        haaTeamCity: 'https://haateamcity.mbank.pl/',
+        teamcity: 'https://teamcity.mbank.pl/'
     };
 
     let state = {
@@ -76,15 +59,14 @@ const App = (() => {
 
     function addFlow() {
         const id = 'flow_' + Date.now();
-        const isFerryt = state.currentServer === 'ferryt';
         state.flows[id] = {
             id,
-            filename: isFerryt ? 'ferryt_deploy_' + (state.flowOrder.length + 1) : 'deploy_' + (state.flowOrder.length + 1),
+            filename: 'deploy_' + (state.flowOrder.length + 1),
             server: state.currentServer,
             enabled: 1,
-            runat: isFerryt ? FERRYT_DEFAULTS.runat : '18:00',
-            email: isFerryt ? FERRYT_DEFAULTS.email : '',
-            blackout: isFerryt ? FERRYT_DEFAULTS.blackout : '',
+            runat: '18:00',
+            email: '',
+            blackout: '',
             sms: '',
             change: '',
             stop: '',
@@ -126,7 +108,7 @@ const App = (() => {
         delete state.flows[flowId];
         state.flowOrder = state.flowOrder.filter(id => id !== flowId);
         if (state.currentFlowId === flowId) {
-            state.currentFlowId = state.flowOrder[0];
+            state.currentFlowId = null;
         }
         renderFlowTabs();
         renderCurrentFlow();
@@ -148,15 +130,18 @@ const App = (() => {
         document.querySelectorAll('.server-tabs-container .tab').forEach(t => {
             t.classList.toggle('active', t.dataset.server === server);
         });
-        updateFerrytUI();
+        updateServerSpecificUI();
         renderFlowTabs();
         renderCurrentFlow();
+        updateFlowCount();
         updateJsonPreview();
         renderAllFilesList();
     }
 
     function getCurrentFlow() {
-        return state.flows[state.currentFlowId] || null;
+        const flow = state.flows[state.currentFlowId];
+        if (!flow || flow.server !== state.currentServer) return null;
+        return flow;
     }
 
     function getServerFlows() {
@@ -181,8 +166,18 @@ const App = (() => {
 
     function loadFlowSettings() {
         const flow = getCurrentFlow();
-        if (!flow) return;
         populateRunatSelect();
+        if (!flow) {
+            document.getElementById('flowFilename').value = '';
+            document.getElementById('flowRunat').value = '';
+            document.getElementById('flowStop').value = '';
+            document.getElementById('flowEmail').value = '';
+            document.getElementById('flowBlackout').value = '';
+            document.getElementById('flowSms').value = '';
+            document.getElementById('flowChange').value = '';
+            document.getElementById('flowEnabled').value = '1';
+            return;
+        }
         document.getElementById('flowFilename').value = flow.filename || '';
         document.getElementById('flowRunat').value = flow.runat || '';
         document.getElementById('flowStop').value = flow.stop || '';
@@ -239,48 +234,8 @@ const App = (() => {
                 servers: document.getElementById('nodeEditPsServers').value.trim(),
                 file: document.getElementById('nodeEditPsFile').value.trim()
             };
-        } else if (!isFerrytServer()) {
+        } else {
             delete node.params;
-        }
-    }
-
-    // ========== FERRYT PARAMS ==========
-
-    function isFerrytServer() {
-        const flow = getCurrentFlow();
-        return flow && flow.server === 'ferryt';
-    }
-
-    function updateFerrytParamsVisibility() {
-        const section = document.getElementById('ferrytParams');
-        if (section) {
-            section.style.display = isFerrytServer() ? '' : 'none';
-        }
-    }
-
-    function loadFerrytParams(node) {
-        const params = node.params || {};
-        document.getElementById('nodeEditBuildPropertyName').value = params.buildPropertyName || '';
-        document.getElementById('nodeEditBuildPropertyValue').value = params.buildPropertyValue || '';
-        document.getElementById('nodeEditArtifactoryFolder').value = params.artifactoryFolder || '';
-        document.getElementById('nodeEditRenewAppTC').value = params.renewAppTC || '';
-    }
-
-    function saveFerrytParams(node) {
-        if (!isFerrytServer()) return;
-        const params = {};
-        const bpn = document.getElementById('nodeEditBuildPropertyName').value.trim();
-        const bpv = document.getElementById('nodeEditBuildPropertyValue').value.trim();
-        const af = document.getElementById('nodeEditArtifactoryFolder').value.trim();
-        const rat = document.getElementById('nodeEditRenewAppTC').value.trim();
-        if (bpn) {
-            params.buildPropertyName = bpn;
-            params.buildPropertyValue = bpv;
-        }
-        if (af) params.artifactoryFolder = af;
-        if (rat) params.renewAppTC = rat;
-        if (Object.keys(params).length > 0) {
-            node.params = params;
         }
     }
 
@@ -305,30 +260,82 @@ const App = (() => {
 
     // ========== NODE MANAGEMENT ==========
 
-    function addNode() {
-        const flow = getCurrentFlow();
-        if (!flow) return;
-        state.nodeCounter++;
-        const nodeId = 'node_' + state.nodeCounter;
-        // Vertical layout: stack nodes top-to-bottom
+    function getNextNodePosition(flow, offset = 0) {
         const existingCount = Object.keys(flow.nodes).length;
         const canvas = document.getElementById('canvas');
         const canvasW = canvas.offsetWidth || 600;
         const nodeW = 180;
+        return {
+            x: Math.max(30, (canvasW - nodeW) / 2),
+            y: 30 + (existingCount + offset) * 110
+        };
+    }
+
+    function getUniqueNodeName(flow, baseName) {
+        const existingNames = new Set(Object.values(flow.nodes).map(n => n.name));
+        let finalName = baseName;
+        let counter = 2;
+        while (existingNames.has(finalName)) {
+            finalName = `${baseName}_${counter}`;
+            counter++;
+        }
+        return finalName;
+    }
+
+    function addNodeWithConfig(config = {}) {
+        const flow = getCurrentFlow();
+        if (!flow) return null;
+
+        state.nodeCounter++;
+        const nodeId = 'node_' + state.nodeCounter;
+        const position = getNextNodePosition(flow);
+
         flow.nodes[nodeId] = {
             id: nodeId,
-            name: 'Build_' + state.nodeCounter,
-            buildid: '',
-            enabled: 1,
-            waitfor: '',
-            retry: '1',
-            external: '',
-            x: Math.max(30, (canvasW - nodeW) / 2), // centered
-            y: 30 + existingCount * 110
+            name: config.name || ('Build_' + state.nodeCounter),
+            buildid: config.buildid || '',
+            enabled: config.enabled ?? 1,
+            waitfor: config.waitfor || '',
+            retry: config.retry ?? '1',
+            external: config.external || '',
+            stop: config.stop || '',
+            x: position.x,
+            y: position.y,
+            params: config.params && Object.keys(config.params).length > 0 ? { ...config.params } : undefined
         };
+
         renderCanvas();
         updateJsonPreview();
         expandCanvasIfNeeded();
+        return nodeId;
+    }
+
+    function addNode() {
+        addNodeWithConfig();
+    }
+
+    function addRunnerNode(buildId, baseName) {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+
+        const nodeId = addNodeWithConfig({
+            name: getUniqueNodeName(flow, baseName),
+            buildid: buildId
+        });
+
+        if (nodeId) {
+            openNodeModal(nodeId);
+        }
+    }
+
+    function addSqlRunner() {
+        if (state.currentServer !== 'haaTeamCity') return;
+        addRunnerNode('TC_SQL', 'SQLRunner');
+    }
+
+    function addScriptRunner() {
+        if (state.currentServer !== 'haaTeamCity') return;
+        addRunnerNode('TC_PowerShell', 'ScriptRunner');
     }
 
     function deleteNode() {
@@ -622,12 +629,6 @@ const App = (() => {
         updateTcParamsVisibility(node.buildid || '');
         loadTcParams(node);
 
-        // Ferryt params
-        updateFerrytParamsVisibility();
-        if (isFerrytServer()) {
-            loadFerrytParams(node);
-        }
-
         // Listen for buildid changes to toggle TC params
         const buildIdInput = document.getElementById('nodeEditBuildId');
         buildIdInput.oninput = function() {
@@ -676,9 +677,6 @@ const App = (() => {
 
         // Save TC params
         saveTcParams(node);
-
-        // Save Ferryt params
-        saveFerrytParams(node);
 
         // Update waitfor references if name changed
         if (oldName !== newName) {
@@ -887,6 +885,11 @@ const App = (() => {
     function renderFlowTabs() {
         const wrapper = document.getElementById('flowTabs');
         const serverFlows = getServerFlows();
+
+        if (!serverFlows.find(f => f.id === state.currentFlowId)) {
+            state.currentFlowId = serverFlows.length > 0 ? serverFlows[0].id : null;
+        }
+
         wrapper.innerHTML = serverFlows.map(flow => {
             const isActive = flow.id === state.currentFlowId ? 'active' : '';
             return `
@@ -896,12 +899,6 @@ const App = (() => {
                 </button>
             `;
         }).join('');
-
-        if (!serverFlows.find(f => f.id === state.currentFlowId)) {
-            if (serverFlows.length > 0) {
-                state.currentFlowId = serverFlows[0].id;
-            }
-        }
     }
 
     function renderCurrentFlow() {
@@ -1017,10 +1014,20 @@ const App = (() => {
         try {
             const data = JSON.parse(localStorage.getItem(getStorageKey()));
             if (data && data.flows && Object.keys(data.flows).length > 0) {
-                state.currentServer = data.currentServer || 'haaTeamCity';
-                state.currentFlowId = data.currentFlowId;
-                state.flows = data.flows;
-                state.flowOrder = data.flowOrder || [];
+                const validServers = new Set(Object.keys(SERVERS));
+                const sanitizedFlows = Object.fromEntries(
+                    Object.entries(data.flows).filter(([, flow]) => flow && validServers.has(flow.server))
+                );
+                const sanitizedFlowOrder = (data.flowOrder || []).filter(id => sanitizedFlows[id]);
+
+                if (Object.keys(sanitizedFlows).length === 0) {
+                    return false;
+                }
+
+                state.currentServer = validServers.has(data.currentServer) ? data.currentServer : 'haaTeamCity';
+                state.flows = sanitizedFlows;
+                state.flowOrder = sanitizedFlowOrder;
+                state.currentFlowId = sanitizedFlows[data.currentFlowId] ? data.currentFlowId : sanitizedFlowOrder[0] || null;
                 state.nodeCounter = data.nodeCounter || 0;
                 return true;
             }
@@ -1129,160 +1136,12 @@ const App = (() => {
         showToast(`Dodano ${addedNames.length} buildów do flow`, 'success');
     }
 
-    // ========== FERRYT BUILD CATALOG ==========
-
-    function updateFerrytUI() {
-        const isFerryt = state.currentServer === 'ferryt';
-        const catalogBtn = document.getElementById('btnBuildCatalog');
-        const validateBtn = document.getElementById('btnValidateArtifactory');
-        if (catalogBtn) catalogBtn.style.display = isFerryt ? '' : 'none';
-        if (validateBtn) validateBtn.style.display = isFerryt ? '' : 'none';
-    }
-
-    function openBuildCatalog() {
-        const flow = getCurrentFlow();
-        if (!flow) return;
-        const modal = document.getElementById('buildCatalogModal');
-        const list = document.getElementById('catalogBuildList');
-
-        // Count existing builds of each type by buildId
-        const existingCounts = {};
-        Object.values(flow.nodes).forEach(n => {
-            FERRYT_BUILD_CATALOG.forEach((item, idx) => {
-                if (n.buildid === item.buildId && item.buildId) {
-                    existingCounts[idx] = (existingCounts[idx] || 0) + 1;
-                }
-            });
-        });
-
-        list.innerHTML = FERRYT_BUILD_CATALOG.map((item, idx) => {
-            const count = existingCounts[idx] || 0;
-            const countBadge = count > 0 ? `<span class="catalog-count-badge">\u00d7${count} w flow</span>` : '';
-
-            let paramInput = '';
-            if (item.buildType === 'Restart serwisow') {
-                paramInput = `
-                    <div class="catalog-param">
-                        <label>todo:</label>
-                        <select id="catalogParam_${idx}" class="catalog-param-input">
-                            <option value="Restart">Restart</option>
-                            <option value="stop">stop</option>
-                            <option value="start">start</option>
-                        </select>
-                    </div>`;
-            } else if (item.buildPropertyName && item.buildType !== 'BPM') {
-                paramInput = `
-                    <div class="catalog-param">
-                        <label>${escapeHtml(item.buildPropertyName)}:</label>
-                        <input type="text" id="catalogParam_${idx}" class="catalog-param-input" placeholder="Wpisz wartość">
-                    </div>`;
-            }
-
-            return `
-                <div class="catalog-item">
-                    <div class="catalog-item-info">
-                        <div class="catalog-item-type">${escapeHtml(item.buildType)} ${countBadge}</div>
-                        <div class="catalog-item-id">${escapeHtml(item.buildId || '(brak buildid)')}</div>
-                        ${item.artifactoryFolder ? '<div class="catalog-item-detail">folder: ' + escapeHtml(item.artifactoryFolder) + '</div>' : ''}
-                    </div>
-                    ${paramInput}
-                    <button class="btn btn-primary btn-sm catalog-add-btn" onclick="App.addFromCatalog(${idx})">Dodaj</button>
-                </div>
-            `;
-        }).join('');
-
-        modal.style.display = 'flex';
-    }
-
-    function closeBuildCatalog() {
-        document.getElementById('buildCatalogModal').style.display = 'none';
-    }
-
-    function addFromCatalog(index) {
-        const flow = getCurrentFlow();
-        if (!flow) return;
-        const item = FERRYT_BUILD_CATALOG[index];
-        if (!item) return;
-
-        // Read parameter value from inline input
-        const paramEl = document.getElementById('catalogParam_' + index);
-        const paramValue = paramEl ? paramEl.value.trim() : '';
-
-        state.nodeCounter++;
-        const nodeId = 'node_' + state.nodeCounter;
-        const canvas = document.getElementById('canvas');
-        const canvasW = canvas.offsetWidth || 600;
-        const nodeW = 180;
-        const existingCount = Object.keys(flow.nodes).length;
-
-        // Auto-rename if name conflicts
-        let name = item.buildType;
-        const existingNames = new Set(Object.values(flow.nodes).map(n => n.name));
-        let counter = 2;
-        while (existingNames.has(name)) {
-            name = item.buildType + '_' + counter;
-            counter++;
-        }
-
-        const params = {};
-        if (item.buildPropertyName) {
-            params.buildPropertyName = item.buildPropertyName;
-            params.buildPropertyValue = paramValue;
-        }
-        if (item.artifactoryFolder) params.artifactoryFolder = item.artifactoryFolder;
-        if (item.renewAppTC) params.renewAppTC = item.renewAppTC;
-
-        flow.nodes[nodeId] = {
-            id: nodeId,
-            name: name,
-            buildid: item.buildId || '',
-            enabled: 1,
-            waitfor: '',
-            retry: '1',
-            external: '',
-            x: Math.max(30, (canvasW - nodeW) / 2),
-            y: 30 + existingCount * 110,
-            params: Object.keys(params).length > 0 ? params : undefined
-        };
-
-        renderCanvas();
-        updateJsonPreview();
-        expandCanvasIfNeeded();
-
-        // Clear input and refresh catalog to update counters
-        if (paramEl && paramEl.tagName === 'INPUT') paramEl.value = '';
-        openBuildCatalog();
-        showToast(`Dodano build: ${name}`, 'success');
-    }
-
-    // ========== ARTIFACTORY VALIDATION ==========
-
-    function validateArtifactory() {
-        const flow = getCurrentFlow();
-        if (!flow) return;
-
-        const nodes = Object.values(flow.nodes);
-        const toValidate = nodes.filter(n => n.params && n.params.artifactoryFolder && n.params.buildPropertyValue);
-
-        if (toValidate.length === 0) {
-            showToast('Brak paczek do walidacji (uzupełnij buildPropertyValue w buildach z artifactoryFolder)', 'info');
-            return;
-        }
-
-        const packages = toValidate.map(n => ({
-            name: n.name,
-            folder: n.params.artifactoryFolder,
-            package: n.params.buildPropertyValue
-        }));
-
-        showToast(`Walidacja ${packages.length} paczek... (backend wymagany)`, 'info');
-
-        // TODO: Backend endpoint for Artifactory validation
-        // fetch('validate-artifactory.aspx', {
-        //     method: 'POST',
-        //     headers: { 'Content-Type': 'application/json' },
-        //     body: JSON.stringify({ artifactoryUrl: 'https://artifactory.pl', packages })
-        // }).then(r => r.json()).then(results => { ... });
+    function updateServerSpecificUI() {
+        const isHaaTeamCity = state.currentServer === 'haaTeamCity';
+        const sqlRunnerBtn = document.getElementById('btnAddSqlRunner');
+        const scriptRunnerBtn = document.getElementById('btnAddScriptRunner');
+        if (sqlRunnerBtn) sqlRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
+        if (scriptRunnerBtn) scriptRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
     }
 
     // ========== EXTERNA MODE ==========
@@ -1394,7 +1253,6 @@ const App = (() => {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeNodeModal();
             if (e.key === 'Escape') closeBulkDrawer();
-            if (e.key === 'Escape') closeBuildCatalog();
             if (e.key === 'Delete' && state.editingNodeId) deleteNode();
         });
     }
@@ -1423,7 +1281,7 @@ const App = (() => {
             switchServer(state.currentServer);
         }
         populateRunatSelect();
-        updateFerrytUI();
+        updateServerSpecificUI();
         renderFlowTabs();
         renderCurrentFlow();
         updateFlowCount();
@@ -1466,10 +1324,8 @@ const App = (() => {
         bulkAddBuilds: withSave(bulkAddBuilds),
         toggleBulkDrawer,
         closeBulkDrawer,
-        openBuildCatalog,
-        closeBuildCatalog,
-        addFromCatalog: withSave(addFromCatalog),
-        validateArtifactory
+        addSqlRunner: withSave(addSqlRunner),
+        addScriptRunner: withSave(addScriptRunner)
     };
 })();
 
