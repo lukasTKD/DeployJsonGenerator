@@ -178,8 +178,8 @@
                     <h3 class="section-title">Szybkie dodawanie buildów</h3>
                     <button class="bulk-drawer-close" onclick="App.closeBulkDrawer()" title="Zamknij">&times;</button>
                 </div>
-                <p class="bulk-drawer-desc">Wklej listę nazw buildów (jeden na linię). Buildy zostaną dodane do bieżącego flow.</p>
-                <textarea id="bulkBuildList" class="externa-textarea" rows="14" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3"></textarea>
+                <p class="bulk-drawer-desc">Wklej listę nazw buildów lub pełne linki TeamCity (jeden wpis na linię). Buildy zostaną dodane do bieżącego flow.</p>
+                <textarea id="bulkBuildList" class="externa-textarea" rows="14" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects"></textarea>
                 <div class="bulk-drawer-actions">
                     <button class="btn btn-primary" onclick="App.bulkAddBuilds()">Dodaj buildy</button>
                     <button class="btn btn-secondary" onclick="App.closeBulkDrawer()">Zamknij</button>
@@ -192,7 +192,7 @@
             <div class="externa-layout">
                 <div class="externa-panel card">
                     <h3 class="section-title">Generator Externa</h3>
-                    <p class="externa-desc">Wklej listę nazw buildów (każdy w nowej linii) i wygeneruj plik JSON z externa: 1</p>
+                    <p class="externa-desc">Wklej listę nazw buildów lub pełne linki TeamCity (każdy w nowej linii) i wygeneruj plik JSON z externa: 1</p>
 
                     <div class="externa-settings">
                         <div class="form-group">
@@ -221,7 +221,7 @@
 
                     <div class="form-group" style="margin-top:8px; flex:1; display:flex; flex-direction:column;">
                         <label>Lista buildów (jeden na linię)</label>
-                        <textarea id="externaBuildList" class="externa-textarea" rows="12" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3&#10;..."></textarea>
+                        <textarea id="externaBuildList" class="externa-textarea" rows="12" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects&#10;..."></textarea>
                     </div>
 
                     <div class="externa-actions">

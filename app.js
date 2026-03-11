@@ -1528,6 +1528,27 @@ const App = (() => {
         return div.innerHTML;
     }
 
+    function extractBuildIdFromInput(value) {
+        const trimmedValue = (value || '').trim();
+        if (!trimmedValue) {
+            return '';
+        }
+
+        const match = trimmedValue.match(/\/buildConfigur(?:ation|adion)\/([^\/?#]+)(?:#.*)?$/i);
+        if (!match) {
+            return trimmedValue.replace(/#.*$/, '');
+        }
+
+        return decodeURIComponent(match[1]).trim();
+    }
+
+    function parseBuildListInput(value) {
+        return value
+            .split('\n')
+            .map(line => extractBuildIdFromInput(line))
+            .filter(line => line.length > 0);
+    }
+
     function showToast(message, type) {
         const toast = document.createElement('div');
         toast.className = `toast ${type || 'info'}`;
@@ -1633,7 +1654,7 @@ const App = (() => {
         }
         if (!flow) return;
         const textarea = document.getElementById('bulkBuildList');
-        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = parseBuildListInput(textarea.value);
 
         if (lines.length === 0) {
             showToast('Wklej przynajmniej jedną nazwę builda', 'error');
@@ -1980,13 +2001,13 @@ const App = (() => {
 
     function updateExternaBuildCount() {
         const textarea = document.getElementById('externaBuildList');
-        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = parseBuildListInput(textarea.value);
         document.getElementById('externaBuildCount').textContent = `${lines.length} buildów`;
     }
 
     function generateExterna() {
         const textarea = document.getElementById('externaBuildList');
-        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const lines = parseBuildListInput(textarea.value);
 
         if (lines.length === 0) {
             showToast('Wklej przynajmniej jedną nazwę builda', 'error');
