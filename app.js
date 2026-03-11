@@ -11,10 +11,13 @@ const App = (() => {
         ferryt: 'https://teamcity.mbank.pl/'
     };
 
+    const SQL_RUNNER_BUILD_ID = 'TC_SQL';
+    const SCRIPT_RUNNER_BUILD_ID = 'TC_PowerShell';
+
     const FERRYT_DEFAULTS = {
         runat: '21:00',
         email: 'hardcore@mbank.pl',
-        blackout: '1680|Ferryt,1696|BPM ServicePoint'
+        blackout: '"1680|Ferryt","1696|BPM ServicePoint"'
     };
 
     const FERRYT_BUILD_CATALOG = [
@@ -368,19 +371,27 @@ const App = (() => {
         'TC_PowerShell': ['servers', 'file']
     };
 
+    function isSqlRunnerType(runnerType) {
+        return runnerType === 'sql';
+    }
+
+    function isScriptRunnerType(runnerType) {
+        return runnerType === 'script';
+    }
+
     function isTcSql(buildId) {
-        return buildId && buildId.toLowerCase() === 'tc_sql';
+        return buildId && buildId.toLowerCase() === SQL_RUNNER_BUILD_ID.toLowerCase();
     }
 
     function isTcPowerShell(buildId) {
-        return buildId && buildId.toLowerCase() === 'tc_powershell';
+        return buildId && buildId.toLowerCase() === SCRIPT_RUNNER_BUILD_ID.toLowerCase();
     }
 
-    function updateTcParamsVisibility(buildId) {
+    function updateTcParamsVisibility(buildId, runnerType = '') {
         const sqlSection = document.getElementById('tcSqlParams');
         const psSection = document.getElementById('tcPowerShellParams');
-        sqlSection.style.display = isTcSql(buildId) ? '' : 'none';
-        psSection.style.display = isTcPowerShell(buildId) ? '' : 'none';
+        sqlSection.style.display = (isSqlRunnerType(runnerType) || isTcSql(buildId)) ? '' : 'none';
+        psSection.style.display = (isScriptRunnerType(runnerType) || isTcPowerShell(buildId)) ? '' : 'none';
     }
 
     function loadTcParams(node) {
@@ -396,13 +407,13 @@ const App = (() => {
 
     function saveTcParams(node) {
         const buildId = node.buildid;
-        if (isTcSql(buildId)) {
+        if (isSqlRunnerType(node.runnerType) || isTcSql(buildId)) {
             node.params = {
                 sqlserver: document.getElementById('nodeEditSqlServer').value.trim(),
                 database: document.getElementById('nodeEditDatabase').value.trim(),
                 file: document.getElementById('nodeEditSqlFile').value.trim()
             };
-        } else if (isTcPowerShell(buildId)) {
+        } else if (isScriptRunnerType(node.runnerType) || isTcPowerShell(buildId)) {
             node.params = {
                 servers: document.getElementById('nodeEditPsServers').value.trim(),
                 file: document.getElementById('nodeEditPsFile').value.trim()
@@ -491,9 +502,10 @@ const App = (() => {
         return duplicate ? `Nazwa "${name}" już istnieje w tym flow` : null;
     }
 
-    function validateBuildId(flow, buildid, excludeNodeId) {
+    function validateBuildId(flow, buildid, excludeNodeId, allowDuplicate = false) {
         if (!buildid) return null; // empty is allowed (placeholder used)
         if (isFerrytServer(flow.server)) return null;
+        if (allowDuplicate) return null;
         // TC_SQL and TC_PowerShell can be duplicated (same buildid, different name)
         if (isTcSql(buildid) || isTcPowerShell(buildid)) return null;
         const duplicate = Object.values(flow.nodes).find(
@@ -548,6 +560,7 @@ const App = (() => {
             external: config.external || '',
             stop: config.stop || '',
             ferrytType: config.ferrytType || '',
+            runnerType: config.runnerType || '',
             x: position.x,
             y: position.y,
             params: config.params && Object.keys(config.params).length > 0 ? { ...config.params } : undefined
@@ -563,13 +576,14 @@ const App = (() => {
         addNodeWithConfig();
     }
 
-    function addRunnerNode(buildId, baseName) {
+    function addRunnerNode(buildId, baseName, runnerType) {
         const flow = getCurrentFlow();
         if (!flow) return;
 
         const nodeId = addNodeWithConfig({
             name: getUniqueNodeName(flow, baseName),
-            buildid: buildId
+            buildid: buildId,
+            runnerType
         });
 
         if (nodeId) {
@@ -579,12 +593,12 @@ const App = (() => {
 
     function addSqlRunner() {
         if (state.currentServer !== 'haaTeamCity') return;
-        addRunnerNode('TC_SQL', 'SQLRunner');
+        addRunnerNode(SQL_RUNNER_BUILD_ID, 'SQLRunner', 'sql');
     }
 
     function addScriptRunner() {
         if (state.currentServer !== 'haaTeamCity') return;
-        addRunnerNode('TC_PowerShell', 'ScriptRunner');
+        addRunnerNode(SCRIPT_RUNNER_BUILD_ID, 'ScriptRunner', 'script');
     }
 
     function deleteNode() {
@@ -878,14 +892,14 @@ const App = (() => {
         document.getElementById('nodeEditStop').value = node.stop || '';
 
         // Show/hide TC params and load values
-        updateTcParamsVisibility(node.buildid || '');
+        updateTcParamsVisibility(node.buildid || '', node.runnerType || '');
         loadTcParams(node);
         renderFerrytParamsFields(node.ferrytType, node.params || {});
 
         // Listen for buildid changes to toggle TC params
         const buildIdInput = document.getElementById('nodeEditBuildId');
         buildIdInput.oninput = function() {
-            updateTcParamsVisibility(this.value.trim());
+            updateTcParamsVisibility(this.value.trim(), node.runnerType || '');
         };
 
         // Clear previous validation messages
@@ -915,7 +929,12 @@ const App = (() => {
         }
 
         // Validate buildid uniqueness
-        const buildIdError = validateBuildId(flow, newBuildId, state.editingNodeId);
+        const buildIdError = validateBuildId(
+            flow,
+            newBuildId,
+            state.editingNodeId,
+            isSqlRunnerType(node.runnerType) || isScriptRunnerType(node.runnerType)
+        );
         if (buildIdError) {
             showValidationError('nodeEditBuildId', buildIdError);
             return;
@@ -1075,7 +1094,7 @@ const App = (() => {
 
         // Optional root-level fields
         if (flow.email) json.email = flow.email;
-        if (flow.blackout) json.blackout = flow.blackout;
+        if (flow.blackout) json.blackout = parseBlackoutValue(flow.blackout);
         if (flow.sms) json.sms = flow.sms;
         if (flow.change) json.change = flow.change;
 
@@ -1138,6 +1157,19 @@ const App = (() => {
 
     function formatJson(obj) {
         return JSON.stringify(obj, null, 4);
+    }
+
+    function parseBlackoutValue(value) {
+        if (!value) return '';
+
+        const parts = value
+            .split(',')
+            .map(item => item.trim().replace(/^"(.*)"$/, '$1'))
+            .filter(Boolean);
+
+        if (parts.length === 0) return '';
+        if (parts.length === 1) return parts[0];
+        return parts;
     }
 
     function updateJsonPreview() {
@@ -1604,7 +1636,7 @@ const App = (() => {
 
         if (!nodeId) return;
 
-        closeBuildCatalog();
+        openBuildCatalog();
         showToast(`Dodano build: ${item.buildType}`, 'success');
     }
 
