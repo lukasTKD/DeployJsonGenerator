@@ -4,7 +4,6 @@
 <%@ Import Namespace="System.Diagnostics" %>
 <%@ Import Namespace="System.IO" %>
 <%@ Import Namespace="System.Net" %>
-<%@ Import Namespace="System.Security.Cryptography" %>
 <%@ Import Namespace="System.Text" %>
 <%@ Import Namespace="System.Text.RegularExpressions" %>
 <%@ Import Namespace="System.Web.Script.Serialization" %>
@@ -32,8 +31,6 @@
         public string artifactoryUser { get; set; }
         public string username { get; set; }
         public string password { get; set; }
-        public string passwordEncrypted { get; set; }
-        public string passwordEncryptionScope { get; set; }
         public string keePassScriptPath { get; set; }
         public string keePassCredentialTitle { get; set; }
         public string keePassUsernameOverride { get; set; }
@@ -230,32 +227,17 @@
         }
 
         if (string.Equals(authMode, "PlainText", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(authMode, "EncryptedPassword", StringComparison.OrdinalIgnoreCase))
+            string.Equals(authMode, "DirectCredentials", StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        return string.IsNullOrWhiteSpace(config.password) && string.IsNullOrWhiteSpace(config.passwordEncrypted);
+        return string.IsNullOrWhiteSpace(config.password);
     }
 
     private string ResolvePassword(ArtifactoryConfig config)
     {
-        if (config == null)
-        {
-            return "";
-        }
-
-        if (!string.IsNullOrWhiteSpace(config.passwordEncrypted))
-        {
-            var scope = string.Equals(config.passwordEncryptionScope, "LocalMachine", StringComparison.OrdinalIgnoreCase)
-                ? DataProtectionScope.LocalMachine
-                : DataProtectionScope.CurrentUser;
-            var protectedBytes = Convert.FromBase64String(config.passwordEncrypted);
-            var plainBytes = ProtectedData.Unprotect(protectedBytes, null, scope);
-            return Encoding.UTF8.GetString(plainBytes);
-        }
-
-        return config.password ?? "";
+        return config != null ? (config.password ?? "") : "";
     }
 
     private ResolvedCredentials ResolveKeePassCredentials(ArtifactoryConfig config)
