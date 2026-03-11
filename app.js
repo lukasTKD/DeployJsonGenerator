@@ -1534,12 +1534,18 @@ const App = (() => {
             return '';
         }
 
-        const match = trimmedValue.match(/\/buildConfigur(?:ation|adion)\/([^\/?#]+)(?:#.*)?$/i);
-        if (!match) {
-            return trimmedValue.replace(/#.*$/, '');
+        const withoutHashOrQuery = trimmedValue.split('#')[0].split('?')[0].trim();
+        const pathParts = withoutHashOrQuery
+            .split('/')
+            .map(part => part.trim())
+            .filter(Boolean);
+
+        const markerIndex = pathParts.findIndex(part => /^buildConfigur(?:ation|adion)$/i.test(part));
+        if (markerIndex !== -1 && pathParts[markerIndex + 1]) {
+            return decodeURIComponent(pathParts[markerIndex + 1]).trim();
         }
 
-        return decodeURIComponent(match[1]).trim();
+        return withoutHashOrQuery;
     }
 
     function parseBuildListInput(value) {
