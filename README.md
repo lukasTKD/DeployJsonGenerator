@@ -23,6 +23,7 @@ Aplikacja obsluguje:
 - katalog buildow Ferryt wraz z walidacja paczek w Artifactory
 - automatyczny zapis stanu w `localStorage`
 - izolacje danych per zalogowany uzytkownik IIS przez `whoami.aspx`
+- logowanie aktywnosci uzytkownikow do pliku na dysku
 
 ## 2. Szybki start dla uzytkownika
 
@@ -461,7 +462,49 @@ Warunki poprawnego dzialania:
   - `X-Frame-Options: SAMEORIGIN`
   - `X-XSS-Protection: 1; mode=block`
 
-## 21. Rozszerzanie aplikacji
+## 21. Logowanie aktywnosci uzytkownikow
+
+Projekt zapisuje aktywnosc uzytkownikow do pliku:
+
+- `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\userActivity.log`
+
+Frontend wysyla lekki request do:
+
+- `activity-log.aspx`
+
+Backend dopisuje pojedynczy wiersz w formacie:
+
+```text
+yyyy-MM-dd HH:mm:ss.fff<TAB>DOMAIN\user<TAB>server<TAB>EVENT_TYPE<TAB>eventData
+```
+
+Przykladowe zdarzenia:
+
+- `PAGE_LOAD`
+- `SERVER_SWITCH`
+- `FLOW_ADD`
+- `FLOW_REMOVE`
+- `FLOW_SETTING_UPDATE`
+- `NODE_ADD`
+- `RUNNER_ADD`
+- `NODE_SAVE`
+- `NODE_DELETE`
+- `BULK_ADD_BUILDS`
+- `JSON_COPY`
+- `JSON_DOWNLOAD_CURRENT`
+- `JSON_DOWNLOAD_ALL`
+- `EXTERNA_GENERATE`
+- `EXTERNA_DOWNLOAD`
+- `FERRYT_VALIDATE_START`
+- `FERRYT_VALIDATE_OK`
+- `FERRYT_VALIDATE_ERROR`
+
+Wymagania:
+
+- konto AppPool musi miec prawo zapisu do `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\`
+- Windows Authentication pozwala logowac login domenowy; bez niej w logu pojawi sie `anonymous`
+
+## 22. Rozszerzanie aplikacji
 
 ### Dodanie nowego pola do node'a
 
@@ -497,7 +540,7 @@ Punkty wejscia:
 - parser danych Ferryt w `getFerrytParamsFromInputs()`
 - walidator endpointu w `validate-artifactory.aspx`
 
-## 22. Utrzymanie i testy reczne
+## 23. Utrzymanie i testy reczne
 
 Minimum po zmianach:
 
@@ -519,7 +562,7 @@ Minimum po zmianach:
    - `Validate` do Artifactory
 8. Odswiezenie strony i sprawdzenie `localStorage`.
 
-## 23. Najczestsze problemy
+## 24. Najczestsze problemy
 
 ### Puste buildy specjalne zostaja na diagramie
 
@@ -546,13 +589,22 @@ Frontend probuje zamienic taka odpowiedz na czytelny komunikat. Jesli nadal widz
 - `validate-artifactory.aspx`
 - dostepnosc `App_Data/artifactory.config.json`
 
-## 24. Autorstwo
+### Brak wpisow w `userActivity.log`
+
+Sprawdz:
+
+- czy istnieje endpoint `activity-log.aspx`
+- czy AppPool ma prawo zapisu do `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\`
+- czy aplikacja nie dostaje odpowiedzi 500 z endpointu logowania
+- czy Windows Authentication jest wlaczone, jesli oczekiwany jest login domenowy
+
+## 25. Autorstwo
 
 Footer aplikacji wskazuje:
 
 - `(c) 2026 DEI-ZUK-C | L.Peryt`
 
-## 25. Pliki historyczne
+## 26. Pliki historyczne
 
 W repo nadal moga istniec starsze pliki dokumentacyjne:
 

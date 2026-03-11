@@ -122,6 +122,28 @@ const App = (() => {
     let currentUsername = '';
     let editingFerrytType = '';
 
+    function stringifyLogDetails(details) {
+        if (details === null || details === undefined) return '';
+        if (typeof details === 'string') return details.slice(0, 500);
+
+        try {
+            return JSON.stringify(details).slice(0, 500);
+        } catch (error) {
+            return String(details).slice(0, 500);
+        }
+    }
+
+    function logEvent(eventType, details = '') {
+        try {
+            const url = `activity-log.aspx?server=${encodeURIComponent(state.currentServer || '')}` +
+                `&event=${encodeURIComponent(eventType || 'UNKNOWN')}` +
+                `&data=${encodeURIComponent(stringifyLogDetails(details))}`;
+            fetch(url, { cache: 'no-store' }).catch(() => {});
+        } catch (error) {
+            // Ignore logging failures so they never affect the UI flow.
+        }
+    }
+
     function getStorageKey() {
         return currentUsername
             ? 'deployJsonGenerator_' + currentUsername
@@ -261,6 +283,7 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
+        logEvent('FLOW_ADD', { flowId: id, filename: state.flows[id].filename, server: state.currentServer });
         return id;
     }
 
@@ -280,6 +303,7 @@ const App = (() => {
             }
         });
         // Create one fresh flow
+        logEvent('FLOW_CLOSE_ALL', { server: state.currentServer, count: serverFlows.length });
         addFlow();
         showToast('Zamknięto wszystkie flow', 'success');
     }
@@ -290,6 +314,7 @@ const App = (() => {
             return;
         }
         if (!confirm('Usunąć ten flow?')) return;
+        const removedFlow = state.flows[flowId];
         delete state.flows[flowId];
         state.flowOrder = state.flowOrder.filter(id => id !== flowId);
         Object.values(state.flows).forEach(flow => {
@@ -306,6 +331,11 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
+        logEvent('FLOW_REMOVE', {
+            flowId,
+            filename: removedFlow ? removedFlow.filename : '',
+            server: state.currentServer
+        });
     }
 
     function switchFlow(flowId) {
@@ -313,6 +343,8 @@ const App = (() => {
         renderFlowTabs();
         renderCurrentFlow();
         updateJsonPreview();
+        const flow = state.flows[flowId];
+        logEvent('FLOW_SWITCH', { flowId, filename: flow ? flow.filename : '' });
     }
 
     function ensureCurrentServerFlow() {
@@ -340,6 +372,7 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
+        logEvent('SERVER_SWITCH', server);
     }
 
     function getCurrentFlow() {
@@ -367,6 +400,12 @@ const App = (() => {
         }
         updateJsonPreview();
         renderAllFilesList();
+        logEvent('FLOW_SETTING_UPDATE', {
+            flowId: flow.id,
+            filename: flow.filename || '',
+            key,
+            value
+        });
     }
 
     function loadFlowSettings() {
@@ -675,7 +714,15 @@ const App = (() => {
     }
 
     function addNode() {
-        addNodeWithConfig();
+        const nodeId = addNodeWithConfig();
+        if (!nodeId) return;
+        const flow = getCurrentFlow();
+        const node = flow && flow.nodes ? flow.nodes[nodeId] : null;
+        logEvent('NODE_ADD', {
+            nodeId,
+            name: node ? node.name : '',
+            buildid: node ? node.buildid : ''
+        });
     }
 
     function addRunnerNode(buildId, baseName, runnerType) {
@@ -691,6 +738,7 @@ const App = (() => {
         if (nodeId) {
             state.pendingNewNodeId = nodeId;
             openNodeModal(nodeId);
+            logEvent('RUNNER_ADD', { nodeId, runnerType, buildId });
         }
     }
 
@@ -727,6 +775,7 @@ const App = (() => {
         if (!flow || !state.editingNodeId) return;
         const nodeId = state.editingNodeId;
         const deletedName = flow.nodes[nodeId].name;
+        const deletedBuildId = flow.nodes[nodeId].buildid || '';
         // Remove connections involving this node
         flow.connections = flow.connections.filter(
             c => c.from !== nodeId && c.to !== nodeId
@@ -740,6 +789,7 @@ const App = (() => {
         renderCanvas();
         updateJsonPreview();
         renderFerrytToolbarButtons();
+        logEvent('NODE_DELETE', { nodeId, name: deletedName, buildid: deletedBuildId });
     }
 
     // ========== CANVAS RENDERING ==========
@@ -1141,6 +1191,14 @@ const App = (() => {
         }
 
         state.pendingNewNodeId = null;
+        logEvent('NODE_SAVE', {
+            nodeId: node.id,
+            oldName,
+            newName,
+            buildid: node.buildid || '',
+            ferrytType: node.ferrytType || '',
+            runnerType: node.runnerType || ''
+        });
         closeNodeModal();
         renderCanvas();
         updateJsonPreview();
@@ -1230,17 +1288,20 @@ const App = (() => {
 
         renderCanvas();
         expandCanvasIfNeeded();
+        logEvent('AUTO_LAYOUT', { flowId: flow.id, nodeCount: nodes.length });
     }
 
     function clearCanvas() {
         const flow = getCurrentFlow();
         if (!flow) return;
         if (!confirm('Wyczyścić wszystkie buildy z tego flow?')) return;
+        const clearedNodeCount = Object.keys(flow.nodes).length;
         flow.nodes = {};
         flow.connections = [];
         renderCanvas();
         updateJsonPreview();
         renderFerrytToolbarButtons();
+        logEvent('CANVAS_CLEAR', { flowId: flow.id, nodeCount: clearedNodeCount });
     }
 
     // ========== JSON GENERATION ==========
@@ -1476,12 +1537,14 @@ const App = (() => {
     function downloadCurrentJson() {
         const flow = getCurrentFlow();
         if (!flow) return;
+        logEvent('JSON_DOWNLOAD_CURRENT', { flowId: flow.id, filename: flow.filename || '' });
         downloadJsonFile(flow.filename + '.json', generateJson(flow));
     }
 
     function downloadFlowJson(flowId) {
         const flow = state.flows[flowId];
         if (!flow) return;
+        logEvent('JSON_DOWNLOAD_FLOW', { flowId, filename: flow.filename || '' });
         downloadJsonFile(flow.filename + '.json', generateJson(flow));
     }
 
@@ -1495,6 +1558,7 @@ const App = (() => {
             downloadJsonFile(flow.filename + '.json', generateJson(flow));
         });
         showToast(`Pobrano ${serverFlows.length} plik(ów) JSON`, 'success');
+        logEvent('JSON_DOWNLOAD_ALL', { server: state.currentServer, flowCount: serverFlows.length });
     }
 
     function downloadJsonFile(filename, jsonObj) {
@@ -1512,6 +1576,7 @@ const App = (() => {
     function copyJson() {
         const flow = getCurrentFlow();
         if (!flow) return;
+        logEvent('JSON_COPY', { flowId: flow.id, filename: flow.filename || '' });
         navigator.clipboard.writeText(formatJson(generateJson(flow))).then(() => {
             showToast('JSON skopiowany do schowka', 'success');
         }).catch(() => {
@@ -1726,6 +1791,11 @@ const App = (() => {
         expandCanvasIfNeeded();
         closeBulkDrawer();
         showToast(`Dodano ${addedNames.length} buildów do flow`, 'success');
+        logEvent('BULK_ADD_BUILDS', {
+            flowId: flow.id,
+            count: addedNames.length,
+            builds: addedNames.join(',')
+        });
     }
 
     function updateServerSpecificUI() {
@@ -1808,6 +1878,7 @@ const App = (() => {
             state.pendingNewNodeId = nodeId;
         }
         openNodeModal(nodeId);
+        logEvent('FERRYT_BUILD_ADD', { nodeId, buildType: item.buildType, buildId: item.buildId || '' });
     }
 
     function collectFerrytValidationPayload(flow) {
@@ -1916,6 +1987,11 @@ const App = (() => {
             return;
         }
 
+        logEvent('FERRYT_VALIDATE_START', {
+            flowId: flow.id,
+            filename: flow.filename || '',
+            packageCount: validation.packages.length
+        });
         setFerrytValidationBusy(true);
         try {
             const response = await fetch('validate-artifactory.aspx', {
@@ -1934,17 +2010,37 @@ const App = (() => {
             renderValidationResult(data, validation.skipped);
 
             if (!response.ok || data.ok === false) {
+                logEvent('FERRYT_VALIDATE_ERROR', {
+                    flowId: flow.id,
+                    filename: flow.filename || '',
+                    error: data.error || 'response_not_ok'
+                });
                 showToast(data.error || 'Walidacja Artifactory zakończona błędem', 'error');
                 return;
             }
 
             if (Array.isArray(data.missing) && data.missing.length > 0) {
+                logEvent('FERRYT_VALIDATE_MISSING', {
+                    flowId: flow.id,
+                    filename: flow.filename || '',
+                    missingCount: data.missing.length
+                });
                 showToast(`Brakuje ${data.missing.length} paczek w Artifactory`, 'error');
                 return;
             }
 
+            logEvent('FERRYT_VALIDATE_OK', {
+                flowId: flow.id,
+                filename: flow.filename || '',
+                packageCount: validation.packages.length
+            });
             showToast('Wszystkie paczki są dostępne w Artifactory', 'success');
         } catch (error) {
+            logEvent('FERRYT_VALIDATE_ERROR', {
+                flowId: flow.id,
+                filename: flow.filename || '',
+                error: error.message || 'request_failed'
+            });
             renderValidationResult({ ok: false, error: error.message || 'Nie udało się wykonać walidacji.' }, validation.skipped);
             showToast(error.message || 'Nie udało się połączyć z walidacją Artifactory', 'error');
         } finally {
@@ -1991,6 +2087,7 @@ const App = (() => {
             populateExternaRunat();
             updateExternaBuildCount();
         }
+        logEvent('MODE_SWITCH', mode);
     }
 
     function populateExternaRunat() {
@@ -2056,6 +2153,11 @@ const App = (() => {
         const preview = document.getElementById('externaJsonPreview');
         preview.innerHTML = syntaxHighlight(formatJson(json));
         showToast(`Wygenerowano JSON z ${lines.length} buildami`, 'success');
+        logEvent('EXTERNA_GENERATE', {
+            server: serverKey,
+            count: lines.length,
+            waitfor
+        });
     }
 
     function copyExternaJson() {
@@ -2063,6 +2165,9 @@ const App = (() => {
             showToast('Najpierw wygeneruj JSON', 'error');
             return;
         }
+        logEvent('EXTERNA_COPY', {
+            filename: document.getElementById('externaFilename').value.trim() || 'externa_deploy'
+        });
         navigator.clipboard.writeText(formatJson(externaJson)).then(() => {
             showToast('JSON skopiowany do schowka', 'success');
         }).catch(() => {
@@ -2076,6 +2181,7 @@ const App = (() => {
             return;
         }
         const filename = (document.getElementById('externaFilename').value.trim() || 'externa_deploy') + '.json';
+        logEvent('EXTERNA_DOWNLOAD', { filename });
         downloadJsonFile(filename, externaJson);
     }
 
@@ -2128,6 +2234,7 @@ const App = (() => {
         if (extTextarea) {
             extTextarea.addEventListener('input', updateExternaBuildCount);
         }
+        logEvent('PAGE_LOAD', { loadedFromStorage: loaded, user: currentUsername || '' });
     }
 
     // ========== PUBLIC API ==========
