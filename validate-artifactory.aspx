@@ -55,6 +55,7 @@
     {
         Response.ContentType = "application/json";
         Response.Cache.SetCacheability(HttpCacheability.NoCache);
+        Response.TrySkipIisCustomErrors = true;
 
         if (!string.Equals(Request.HttpMethod, "POST", StringComparison.OrdinalIgnoreCase))
         {
@@ -398,7 +399,10 @@
 
     private void WriteJson(object data, int statusCode = 200)
     {
+        Response.Clear();
         Response.StatusCode = statusCode;
+        Response.ContentType = "application/json";
+        Response.TrySkipIisCustomErrors = true;
         Response.Write(_serializer.Serialize(data));
     }
 </script>
