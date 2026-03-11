@@ -1,6 +1,7 @@
 <%@ Page Language="C#" %>
 <%@ Import Namespace="System" %>
 <%@ Import Namespace="System.Collections.Generic" %>
+<%@ Import Namespace="System.Diagnostics" %>
 <%@ Import Namespace="System.IO" %>
 <%@ Import Namespace="System.Net" %>
 <%@ Import Namespace="System.Security.Cryptography" %>
@@ -26,11 +27,28 @@
 
     public class ArtifactoryConfig
     {
+        public string authMode { get; set; }
         public string baseUrl { get; set; }
         public string username { get; set; }
         public string password { get; set; }
         public string passwordEncrypted { get; set; }
         public string passwordEncryptionScope { get; set; }
+        public string keePassScriptPath { get; set; }
+        public string keePassCredentialTitle { get; set; }
+        public string keePassUsernameOverride { get; set; }
+    }
+
+    public class ResolvedCredentials
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+    }
+
+    public class KeePassCredentialResult
+    {
+        public string username { get; set; }
+        public string password { get; set; }
+        public string error { get; set; }
     }
 
     private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
@@ -64,8 +82,8 @@
             }
 
             var config = LoadConfig();
-            var password = ResolvePassword(config);
-            if (string.IsNullOrWhiteSpace(config.baseUrl) || string.IsNullOrWhiteSpace(config.username) || string.IsNullOrWhiteSpace(password))
+            var credentials = ResolveCredentials(config);
+            if (string.IsNullOrWhiteSpace(config.baseUrl) || string.IsNullOrWhiteSpace(credentials.Username) || string.IsNullOrWhiteSpace(credentials.Password))
             {
                 WriteJson(new
                 {
@@ -100,7 +118,7 @@
                 string html;
                 if (!folderCache.TryGetValue(folderUrl, out html))
                 {
-                    html = DownloadFolderHtml(folderUrl, config.username, password);
+                    html = DownloadFolderHtml(folderUrl, credentials.Username, credentials.Password);
                     folderCache[folderUrl] = html;
                 }
 
@@ -178,6 +196,26 @@
             : _serializer.Deserialize<ArtifactoryConfig>(json);
     }
 
+    private ResolvedCredentials ResolveCredentials(ArtifactoryConfig config)
+    {
+        if (config == null)
+        {
+            return new ResolvedCredentials();
+        }
+
+        var authMode = (config.authMode ?? "").Trim();
+        if (string.Equals(authMode, "KeePassVault", StringComparison.OrdinalIgnoreCase))
+        {
+            return ResolveKeePassCredentials(config);
+        }
+
+        return new ResolvedCredentials
+        {
+            Username = config.username ?? "",
+            Password = ResolvePassword(config)
+        };
+    }
+
     private string ResolvePassword(ArtifactoryConfig config)
     {
         if (config == null)
@@ -196,6 +234,112 @@
         }
 
         return config.password ?? "";
+    }
+
+    private ResolvedCredentials ResolveKeePassCredentials(ArtifactoryConfig config)
+    {
+        var scriptPath = (config.keePassScriptPath ?? "").Trim();
+        var credentialTitle = (config.keePassCredentialTitle ?? "").Trim();
+
+        if (string.IsNullOrWhiteSpace(scriptPath))
+        {
+            throw new Exception("Brak keePassScriptPath w konfiguracji.");
+        }
+
+        if (!Path.IsPathRooted(scriptPath))
+        {
+            scriptPath = Path.GetFullPath(Path.Combine(Server.MapPath("~/"), scriptPath));
+        }
+
+        if (!File.Exists(scriptPath))
+        {
+            throw new Exception("Nie znaleziono KeePassVaultAPI.ps1: " + scriptPath);
+        }
+
+        if (string.IsNullOrWhiteSpace(credentialTitle))
+        {
+            throw new Exception("Brak keePassCredentialTitle w konfiguracji.");
+        }
+
+        var script = @"
+$ErrorActionPreference = 'Stop'
+. " + ToPowerShellLiteral(scriptPath) + @"
+$cred = KeePass-GetCredentials -title " + ToPowerShellLiteral(credentialTitle) + @"
+if ($null -eq $cred) { throw 'KeePass-GetCredentials zwrocilo null.' }
+$secret = $cred.Secret
+if ($secret -is [System.Security.SecureString]) {
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secret)
+    try {
+        $secret = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+    } finally {
+        [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+    }
+}
+[pscustomobject]@{
+    username = [string]$cred.UserName
+    password = [string]$secret
+} | ConvertTo-Json -Compress
+";
+
+        var output = RunPowerShell(script);
+        var result = _serializer.Deserialize<KeePassCredentialResult>(output);
+        if (result == null)
+        {
+            throw new Exception("KeePass zwrocil pusty wynik.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.error))
+        {
+            throw new Exception(result.error);
+        }
+
+        var username = string.IsNullOrWhiteSpace(config.keePassUsernameOverride)
+            ? (result.username ?? "")
+            : config.keePassUsernameOverride;
+
+        return new ResolvedCredentials
+        {
+            Username = username,
+            Password = result.password ?? ""
+        };
+    }
+
+    private string RunPowerShell(string script)
+    {
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
+        var psi = new ProcessStartInfo
+        {
+            FileName = "powershell.exe",
+            Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " + encoded,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using (var process = Process.Start(psi))
+        {
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                throw new Exception("Blad KeePassVault: " + (string.IsNullOrWhiteSpace(stderr) ? stdout : stderr));
+            }
+
+            if (string.IsNullOrWhiteSpace(stdout))
+            {
+                throw new Exception("KeePassVault nie zwrocil danych.");
+            }
+
+            return stdout.Trim();
+        }
+    }
+
+    private string ToPowerShellLiteral(string value)
+    {
+        return "'" + (value ?? "").Replace("'", "''") + "'";
     }
 
     private string DownloadFolderHtml(string url, string username, string password)
