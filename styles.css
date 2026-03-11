@@ -1077,30 +1077,25 @@ body {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 12px;
     background: #f8f9fa;
     border-radius: 6px;
     border: 1px solid #eee;
-    cursor: pointer;
-    transition: background 0.15s;
-}
-
-.catalog-item:hover:not(.catalog-item-added) {
-    background: #eef0f2;
-}
-
-.catalog-item-added {
-    opacity: 0.5;
+    flex-wrap: wrap;
 }
 
 .catalog-item-info {
     flex: 1;
+    min-width: 180px;
 }
 
 .catalog-item-type {
     font-weight: 600;
     font-size: 13px;
     color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .catalog-item-id {
@@ -1117,34 +1112,54 @@ body {
     margin-top: 2px;
 }
 
-.catalog-hint {
-    font-size: 12px;
-    color: #999;
+.catalog-count-badge {
+    font-size: 11px;
     font-weight: 500;
+    color: #fff;
+    background: #E60000;
+    padding: 1px 8px;
+    border-radius: 10px;
 }
 
-.catalog-footer-actions {
+.catalog-param {
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 200px;
 }
 
-.catalog-checkbox {
-    width: 18px;
-    height: 18px;
-    accent-color: #E60000;
-    cursor: pointer;
+.catalog-param label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    white-space: nowrap;
+}
+
+.catalog-param-input {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    flex: 1;
+    min-width: 120px;
+}
+
+.catalog-param-input:focus {
+    outline: none;
+    border-color: #E60000;
+    box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.2);
+}
+
+.catalog-add-btn {
     flex-shrink: 0;
 }
 
-.catalog-item label {
-    cursor: pointer;
-}
-
-.catalog-badge-added {
+.catalog-hint {
     font-size: 11px;
     color: #999;
-    font-weight: 500;
-    flex-shrink: 0;
+    flex: 1;
 }
 
 #btnBuildCatalog {

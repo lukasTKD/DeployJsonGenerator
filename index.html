@@ -232,7 +232,7 @@
 
     <!-- Build Catalog Modal (Ferryt) -->
     <div class="modal-overlay" id="buildCatalogModal" style="display:none;">
-        <div class="modal-box" style="width:550px;">
+        <div class="modal-box" style="width:700px;">
             <div class="modal-header">
                 <h3>Katalog Buildów Ferryt</h3>
                 <button class="modal-close" onclick="App.closeBuildCatalog()">&times;</button>
@@ -241,11 +241,8 @@
                 <!-- Generated dynamically -->
             </div>
             <div class="modal-footer">
-                <span class="catalog-hint" id="catalogSelectedCount">Zaznacz buildy</span>
-                <div class="catalog-footer-actions">
-                    <button class="btn btn-primary" id="btnCatalogAddSelected" onclick="App.addSelectedFromCatalog()" disabled>Dodaj wybrane</button>
-                    <button class="btn btn-secondary" onclick="App.closeBuildCatalog()">Zamknij</button>
-                </div>
+                <span class="catalog-hint">Kliknij "Dodaj" przy wybranym buildzie. Możesz dodać ten sam typ wielokrotnie.</span>
+                <button class="btn btn-secondary" onclick="App.closeBuildCatalog()">Zamknij</button>
             </div>
         </div>
     </div>
