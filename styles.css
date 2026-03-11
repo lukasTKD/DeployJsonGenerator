@@ -1075,12 +1075,18 @@ body {
 /* Build Catalog (Ferryt) */
 .catalog-item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 12px;
     padding: 10px 12px;
     background: #f8f9fa;
     border-radius: 6px;
     border: 1px solid #eee;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.catalog-item:hover:not(.catalog-item-added) {
+    background: #eef0f2;
 }
 
 .catalog-item-added {
@@ -1114,6 +1120,31 @@ body {
 .catalog-hint {
     font-size: 12px;
     color: #999;
+    font-weight: 500;
+}
+
+.catalog-footer-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.catalog-checkbox {
+    width: 18px;
+    height: 18px;
+    accent-color: #E60000;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.catalog-item label {
+    cursor: pointer;
+}
+
+.catalog-badge-added {
+    font-size: 11px;
+    color: #999;
+    font-weight: 500;
+    flex-shrink: 0;
 }
 
 #btnBuildCatalog {

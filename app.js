@@ -1148,72 +1148,98 @@ const App = (() => {
         list.innerHTML = FERRYT_BUILD_CATALOG.map((item, idx) => {
             const alreadyAdded = existingBuildTypes.has(item.buildType);
             return `
-                <div class="catalog-item ${alreadyAdded ? 'catalog-item-added' : ''}">
+                <label class="catalog-item ${alreadyAdded ? 'catalog-item-added' : ''}">
+                    <input type="checkbox" class="catalog-checkbox" value="${idx}" ${alreadyAdded ? 'disabled checked' : ''}>
                     <div class="catalog-item-info">
                         <div class="catalog-item-type">${escapeHtml(item.buildType)}</div>
                         <div class="catalog-item-id">${escapeHtml(item.buildId || '(brak buildid)')}</div>
                         ${item.artifactoryFolder ? '<div class="catalog-item-detail">folder: ' + escapeHtml(item.artifactoryFolder) + '</div>' : ''}
                     </div>
-                    <button class="btn btn-primary btn-sm" onclick="App.addFromCatalog(${idx})" ${alreadyAdded ? 'disabled' : ''}>
-                        ${alreadyAdded ? 'Dodano' : 'Dodaj'}
-                    </button>
-                </div>
+                    ${alreadyAdded ? '<span class="catalog-badge-added">Dodano</span>' : ''}
+                </label>
             `;
         }).join('');
 
+        updateCatalogCount();
         modal.style.display = 'flex';
+
+        // Update count on checkbox change
+        list.querySelectorAll('.catalog-checkbox').forEach(cb => {
+            cb.addEventListener('change', updateCatalogCount);
+        });
+    }
+
+    function updateCatalogCount() {
+        const checked = document.querySelectorAll('.catalog-checkbox:checked:not(:disabled)').length;
+        const countEl = document.getElementById('catalogSelectedCount');
+        const addBtn = document.getElementById('btnCatalogAddSelected');
+        if (countEl) countEl.textContent = checked > 0 ? `Zaznaczono: ${checked}` : 'Zaznacz buildy';
+        if (addBtn) addBtn.disabled = checked === 0;
     }
 
     function closeBuildCatalog() {
         document.getElementById('buildCatalogModal').style.display = 'none';
     }
 
-    function addFromCatalog(index) {
+    function addSelectedFromCatalog() {
         const flow = getCurrentFlow();
         if (!flow) return;
-        const item = FERRYT_BUILD_CATALOG[index];
-        if (!item) return;
 
-        state.nodeCounter++;
-        const nodeId = 'node_' + state.nodeCounter;
+        const checkboxes = document.querySelectorAll('.catalog-checkbox:checked:not(:disabled)');
+        const indices = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+        if (indices.length === 0) {
+            showToast('Zaznacz przynajmniej jeden build', 'error');
+            return;
+        }
+
         const canvas = document.getElementById('canvas');
         const canvasW = canvas.offsetWidth || 600;
         const nodeW = 180;
-        const existingCount = Object.keys(flow.nodes).length;
-
-        // Auto-rename if name conflicts
-        let name = item.buildType;
         const existingNames = new Set(Object.values(flow.nodes).map(n => n.name));
-        let counter = 2;
-        while (existingNames.has(name)) {
-            name = item.buildType + '_' + counter;
-            counter++;
-        }
+        let existingCount = Object.keys(flow.nodes).length;
 
-        const params = {};
-        if (item.buildPropertyName) params.buildPropertyName = item.buildPropertyName;
-        if (item.buildPropertyValue) params.buildPropertyValue = item.buildPropertyValue;
-        if (item.artifactoryFolder) params.artifactoryFolder = item.artifactoryFolder;
-        if (item.renewAppTC) params.renewAppTC = item.renewAppTC;
+        indices.forEach(index => {
+            const item = FERRYT_BUILD_CATALOG[index];
+            if (!item) return;
 
-        flow.nodes[nodeId] = {
-            id: nodeId,
-            name: name,
-            buildid: item.buildId || '',
-            enabled: 1,
-            waitfor: '',
-            retry: '1',
-            external: '',
-            x: Math.max(30, (canvasW - nodeW) / 2),
-            y: 30 + existingCount * 110,
-            params: Object.keys(params).length > 0 ? params : undefined
-        };
+            state.nodeCounter++;
+            const nodeId = 'node_' + state.nodeCounter;
+
+            let name = item.buildType;
+            let counter = 2;
+            while (existingNames.has(name)) {
+                name = item.buildType + '_' + counter;
+                counter++;
+            }
+            existingNames.add(name);
+
+            const params = {};
+            if (item.buildPropertyName) params.buildPropertyName = item.buildPropertyName;
+            if (item.buildPropertyValue) params.buildPropertyValue = item.buildPropertyValue;
+            if (item.artifactoryFolder) params.artifactoryFolder = item.artifactoryFolder;
+            if (item.renewAppTC) params.renewAppTC = item.renewAppTC;
+
+            flow.nodes[nodeId] = {
+                id: nodeId,
+                name: name,
+                buildid: item.buildId || '',
+                enabled: 1,
+                waitfor: '',
+                retry: '1',
+                external: '',
+                x: Math.max(30, (canvasW - nodeW) / 2),
+                y: 30 + existingCount * 110,
+                params: Object.keys(params).length > 0 ? params : undefined
+            };
+            existingCount++;
+        });
 
         renderCanvas();
         updateJsonPreview();
         expandCanvasIfNeeded();
-        openBuildCatalog(); // refresh to update "added" states
-        showToast(`Dodano build: ${name}`, 'success');
+        closeBuildCatalog();
+        showToast(`Dodano ${indices.length} buildów z katalogu`, 'success');
     }
 
     // ========== ARTIFACTORY VALIDATION ==========
@@ -1429,7 +1455,7 @@ const App = (() => {
         closeBulkDrawer,
         openBuildCatalog,
         closeBuildCatalog,
-        addFromCatalog: withSave(addFromCatalog),
+        addSelectedFromCatalog: withSave(addSelectedFromCatalog),
         validateArtifactory
     };
 })();

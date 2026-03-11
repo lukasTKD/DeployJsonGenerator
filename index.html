@@ -241,8 +241,11 @@
                 <!-- Generated dynamically -->
             </div>
             <div class="modal-footer">
-                <span class="catalog-hint">Wybierz buildy do dodania do flow</span>
-                <button class="btn btn-secondary" onclick="App.closeBuildCatalog()">Zamknij</button>
+                <span class="catalog-hint" id="catalogSelectedCount">Zaznacz buildy</span>
+                <div class="catalog-footer-actions">
+                    <button class="btn btn-primary" id="btnCatalogAddSelected" onclick="App.addSelectedFromCatalog()" disabled>Dodaj wybrane</button>
+                    <button class="btn btn-secondary" onclick="App.closeBuildCatalog()">Zamknij</button>
+                </div>
             </div>
         </div>
     </div>
