@@ -114,6 +114,7 @@ const App = (() => {
         flowOrder: [],
         nodeCounter: 0,
         editingNodeId: null,
+        pendingNewNodeId: null,
         dragging: null,
         connecting: null
     };
@@ -160,7 +161,7 @@ const App = (() => {
     function normalizeFerrytNode(node) {
         if (!node) return;
 
-        const params = { ...(node.params || {}) };
+        const params = sanitizeParams({ ...(node.params || {}) });
         let ferrytType = node.ferrytType || '';
 
         if (params.buildPropertyName) {
@@ -424,6 +425,83 @@ const App = (() => {
         return buildId && buildId.toLowerCase() === SCRIPT_RUNNER_BUILD_ID.toLowerCase();
     }
 
+    function sanitizeParams(params = {}) {
+        return Object.entries(params).reduce((result, [key, value]) => {
+            if (value === null || value === undefined) {
+                return result;
+            }
+
+            if (typeof value === 'string') {
+                const trimmedValue = value.trim();
+                if (!trimmedValue) {
+                    return result;
+                }
+                result[key] = trimmedValue;
+                return result;
+            }
+
+            result[key] = value;
+            return result;
+        }, {});
+    }
+
+    function getTcParamsFromModal(node) {
+        let fields = null;
+
+        if (isSqlRunnerType(node.runnerType) || isTcSql(node.buildid)) {
+            fields = [
+                { key: 'sqlserver', label: 'sqlserver', inputId: 'nodeEditSqlServer' },
+                { key: 'database', label: 'database', inputId: 'nodeEditDatabase' },
+                { key: 'file', label: 'file', inputId: 'nodeEditSqlFile' }
+            ];
+        } else if (isScriptRunnerType(node.runnerType) || isTcPowerShell(node.buildid)) {
+            fields = [
+                { key: 'servers', label: 'servers', inputId: 'nodeEditPsServers' },
+                { key: 'file', label: 'file', inputId: 'nodeEditPsFile' }
+            ];
+        }
+
+        if (!fields) {
+            return { params: null, missingFieldId: null, missingLabel: null };
+        }
+
+        const params = {};
+        for (const field of fields) {
+            const value = document.getElementById(field.inputId).value.trim();
+            if (!value) {
+                return { params: null, missingFieldId: field.inputId, missingLabel: field.label };
+            }
+            params[field.key] = value;
+        }
+
+        return { params, missingFieldId: null, missingLabel: null };
+    }
+
+    function nodeRequiresCompletedParams(node) {
+        if (!node) return false;
+
+        if (
+            isSqlRunnerType(node.runnerType) ||
+            isTcSql(node.buildid) ||
+            isScriptRunnerType(node.runnerType) ||
+            isTcPowerShell(node.buildid)
+        ) {
+            return true;
+        }
+
+        const ferrytType = node.ferrytType || '';
+        if (!isFerrytServer() || !ferrytType) {
+            return false;
+        }
+
+        if (isFerrytRenewType(ferrytType)) {
+            return true;
+        }
+
+        const item = getFerrytCatalogItem(ferrytType);
+        return !!(item && item.fields && item.fields.some(field => field.required));
+    }
+
     function updateTcParamsVisibility(buildId, runnerType = '') {
         const sqlSection = document.getElementById('tcSqlParams');
         const psSection = document.getElementById('tcPowerShellParams');
@@ -432,7 +510,7 @@ const App = (() => {
     }
 
     function loadTcParams(node) {
-        const params = node.params || {};
+        const params = sanitizeParams(node.params || {});
         // TC_SQL fields
         document.getElementById('nodeEditSqlServer').value = params.sqlserver || '';
         document.getElementById('nodeEditDatabase').value = params.database || '';
@@ -442,19 +520,10 @@ const App = (() => {
         document.getElementById('nodeEditPsFile').value = params.file || '';
     }
 
-    function saveTcParams(node) {
-        const buildId = node.buildid;
-        if (isSqlRunnerType(node.runnerType) || isTcSql(buildId)) {
-            node.params = {
-                sqlserver: document.getElementById('nodeEditSqlServer').value.trim(),
-                database: document.getElementById('nodeEditDatabase').value.trim(),
-                file: document.getElementById('nodeEditSqlFile').value.trim()
-            };
-        } else if (isScriptRunnerType(node.runnerType) || isTcPowerShell(buildId)) {
-            node.params = {
-                servers: document.getElementById('nodeEditPsServers').value.trim(),
-                file: document.getElementById('nodeEditPsFile').value.trim()
-            };
+    function saveTcParams(node, paramsOverride = null) {
+        const tcParams = paramsOverride || getTcParamsFromModal(node).params;
+        if (tcParams && Object.keys(tcParams).length > 0) {
+            node.params = sanitizeParams(tcParams);
         } else {
             delete node.params;
         }
@@ -595,7 +664,7 @@ const App = (() => {
             runnerType: config.runnerType || '',
             x: position.x,
             y: position.y,
-            params: config.params && Object.keys(config.params).length > 0 ? { ...config.params } : undefined
+            params: config.params && Object.keys(sanitizeParams(config.params)).length > 0 ? sanitizeParams(config.params) : undefined
         };
 
         renderCanvas();
@@ -620,8 +689,27 @@ const App = (() => {
         });
 
         if (nodeId) {
+            state.pendingNewNodeId = nodeId;
             openNodeModal(nodeId);
         }
+    }
+
+    function discardPendingNode(nodeId) {
+        const flow = getCurrentFlow();
+        if (!flow || !nodeId || !flow.nodes[nodeId]) return;
+
+        const deletedName = flow.nodes[nodeId].name;
+        flow.connections = flow.connections.filter(
+            c => c.from !== nodeId && c.to !== nodeId
+        );
+        Object.values(flow.nodes).forEach(n => {
+            if (n.waitfor === deletedName) n.waitfor = '';
+        });
+        delete flow.nodes[nodeId];
+        renderCanvas();
+        updateJsonPreview();
+        renderFerrytToolbarButtons();
+        saveState();
     }
 
     function addSqlRunner() {
@@ -944,9 +1032,26 @@ const App = (() => {
     }
 
     function closeNodeModal() {
+        const nodeId = state.editingNodeId;
+        const flow = getCurrentFlow();
+        const shouldDiscardPendingNode =
+            nodeId &&
+            state.pendingNewNodeId === nodeId &&
+            flow &&
+            flow.nodes[nodeId] &&
+            nodeRequiresCompletedParams(flow.nodes[nodeId]);
+
         document.getElementById('nodeEditModal').style.display = 'none';
         state.editingNodeId = null;
         editingFerrytType = '';
+        if (shouldDiscardPendingNode) {
+            state.pendingNewNodeId = null;
+            discardPendingNode(nodeId);
+            return;
+        }
+        if (state.pendingNewNodeId === nodeId) {
+            state.pendingNewNodeId = null;
+        }
     }
 
     function handleFerrytRenewTypeChange(value) {
@@ -996,6 +1101,15 @@ const App = (() => {
             }
         }
 
+        const tcValidation = getTcParamsFromModal({
+            ...node,
+            buildid: newBuildId
+        });
+        if (tcValidation.missingLabel) {
+            showValidationError(tcValidation.missingFieldId, `Uzupełnij ${tcValidation.missingLabel}`);
+            return;
+        }
+
         node.name = newName;
         node.buildid = newBuildId;
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
@@ -1007,9 +1121,9 @@ const App = (() => {
         }
 
         // Save TC params
-        saveTcParams(node);
+        saveTcParams(node, tcValidation.params);
         if (isFerrytServer() && activeFerrytType) {
-            const ferrytParams = getFerrytParamsFromModal(activeFerrytType).params;
+            const ferrytParams = sanitizeParams(getFerrytParamsFromModal(activeFerrytType).params);
             if (Object.keys(ferrytParams).length > 0) {
                 node.params = ferrytParams;
             } else {
@@ -1026,6 +1140,7 @@ const App = (() => {
             });
         }
 
+        state.pendingNewNodeId = null;
         closeNodeModal();
         renderCanvas();
         updateJsonPreview();
@@ -1165,8 +1280,9 @@ const App = (() => {
             if (node.external) build.external = node.external;
             if (node.stop) build.stop = node.stop;
             // TC params
-            if (node.params && Object.keys(node.params).length > 0) {
-                build.params = { ...node.params };
+            const sanitizedParams = sanitizeParams(node.params || {});
+            if (Object.keys(sanitizedParams).length > 0) {
+                build.params = sanitizedParams;
             }
             json.builds[node.name] = build;
         });
@@ -1661,6 +1777,9 @@ const App = (() => {
 
         if (!nodeId) return;
 
+        if (nodeRequiresCompletedParams(flow.nodes[nodeId])) {
+            state.pendingNewNodeId = nodeId;
+        }
         openNodeModal(nodeId);
     }
 
