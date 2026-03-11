@@ -69,9 +69,9 @@ const App = (() => {
             blackout: '',
             sms: '',
             change: '',
-            stop: '',
             nodes: {},
-            connections: []
+            connections: [],
+            interflowWaitfor: []
         };
         state.flowOrder.push(id);
         state.currentFlowId = id;
@@ -79,7 +79,7 @@ const App = (() => {
         renderCurrentFlow();
         updateFlowCount();
         updateJsonPreview();
-
+        renderInterflowDeps();
         renderAllFilesList();
         return id;
     }
@@ -94,6 +94,11 @@ const App = (() => {
             delete state.flows[id];
         });
         state.flowOrder = state.flowOrder.filter(id => !serverFlowIds.has(id));
+        Object.values(state.flows).forEach(flow => {
+            if (Array.isArray(flow.interflowWaitfor)) {
+                flow.interflowWaitfor = flow.interflowWaitfor.filter(id => !serverFlowIds.has(id));
+            }
+        });
         // Create one fresh flow
         addFlow();
         showToast('Zamknięto wszystkie flow', 'success');
@@ -107,6 +112,11 @@ const App = (() => {
         if (!confirm('Usunąć ten flow?')) return;
         delete state.flows[flowId];
         state.flowOrder = state.flowOrder.filter(id => id !== flowId);
+        Object.values(state.flows).forEach(flow => {
+            if (Array.isArray(flow.interflowWaitfor)) {
+                flow.interflowWaitfor = flow.interflowWaitfor.filter(id => id !== flowId);
+            }
+        });
         if (state.currentFlowId === flowId) {
             state.currentFlowId = null;
         }
@@ -114,7 +124,7 @@ const App = (() => {
         renderCurrentFlow();
         updateFlowCount();
         updateJsonPreview();
-
+        renderInterflowDeps();
         renderAllFilesList();
     }
 
@@ -148,6 +158,7 @@ const App = (() => {
         renderCurrentFlow();
         updateFlowCount();
         updateJsonPreview();
+        renderInterflowDeps();
         renderAllFilesList();
     }
 
@@ -171,7 +182,7 @@ const App = (() => {
         flow[key] = value;
         if (key === 'filename') {
             renderFlowTabs();
-    
+            renderInterflowDeps();
         }
         updateJsonPreview();
         renderAllFilesList();
@@ -183,7 +194,7 @@ const App = (() => {
         if (!flow) {
             document.getElementById('flowFilename').value = '';
             document.getElementById('flowRunat').value = '';
-            document.getElementById('flowStop').value = '';
+            document.getElementById('flowWaitfor').value = '';
             document.getElementById('flowEmail').value = '';
             document.getElementById('flowBlackout').value = '';
             document.getElementById('flowSms').value = '';
@@ -193,12 +204,20 @@ const App = (() => {
         }
         document.getElementById('flowFilename').value = flow.filename || '';
         document.getElementById('flowRunat').value = flow.runat || '';
-        document.getElementById('flowStop').value = flow.stop || '';
+        document.getElementById('flowWaitfor').value = getInterflowWaitforNames(flow).join(', ') || '';
         document.getElementById('flowEmail').value = flow.email || '';
         document.getElementById('flowBlackout').value = flow.blackout || '';
         document.getElementById('flowSms').value = flow.sms || '';
         document.getElementById('flowChange').value = flow.change || '';
         document.getElementById('flowEnabled').value = flow.enabled;
+    }
+
+    function getInterflowWaitforNames(flow) {
+        if (!Array.isArray(flow.interflowWaitfor)) return [];
+        return flow.interflowWaitfor
+            .map(id => state.flows[id])
+            .filter(candidate => candidate && candidate.server === flow.server)
+            .map(candidate => candidate.filename);
     }
 
     // ========== TC BUILD PARAMS ==========
@@ -810,8 +829,14 @@ const App = (() => {
         // runat always present
         json.runat = flow.runat || '';
 
+        const waitforNames = getInterflowWaitforNames(flow);
+        if (waitforNames.length === 1) {
+            json.waitfor = waitforNames[0];
+        } else if (waitforNames.length > 1) {
+            json.waitfor = waitforNames.join(',');
+        }
+
         // Optional root-level fields
-        if (flow.stop) json.stop = flow.stop;
         if (flow.email) json.email = flow.email;
         if (flow.blackout) json.blackout = flow.blackout;
         if (flow.sms) json.sms = flow.sms;
@@ -921,6 +946,63 @@ const App = (() => {
     function renderCurrentFlow() {
         loadFlowSettings();
         renderCanvas();
+        renderInterflowDeps();
+    }
+
+    function renderInterflowDeps() {
+        const list = document.getElementById('interflowList');
+        if (!list) return;
+
+        const serverFlows = getServerFlows();
+        if (serverFlows.length < 2) {
+            list.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">Dodaj więcej niż jeden flow aby ustawić zależności między nimi.</div>';
+            return;
+        }
+
+        list.innerHTML = serverFlows.map(flow => {
+            if (!Array.isArray(flow.interflowWaitfor)) {
+                flow.interflowWaitfor = flow.interflowWaitfor ? [flow.interflowWaitfor] : [];
+            }
+
+            const otherFlows = serverFlows.filter(candidate => candidate.id !== flow.id);
+            const checkboxes = otherFlows.map(candidate => {
+                const checked = flow.interflowWaitfor.includes(candidate.id) ? 'checked' : '';
+                return `
+                    <label class="interflow-checkbox-label">
+                        <input type="checkbox" ${checked}
+                            onchange="App.toggleInterflowDep('${flow.id}', '${candidate.id}', this.checked)">
+                        <span>${escapeHtml(candidate.filename)}.json</span>
+                    </label>
+                `;
+            }).join('');
+
+            return `
+                <div class="interflow-item">
+                    <label>${escapeHtml(flow.filename)}.json</label>
+                    <span>czeka na:</span>
+                    <div class="interflow-checkboxes">${checkboxes}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function toggleInterflowDep(flowId, waitforFlowId, checked) {
+        const flow = state.flows[flowId];
+        if (!flow) return;
+        if (!Array.isArray(flow.interflowWaitfor)) {
+            flow.interflowWaitfor = [];
+        }
+
+        if (checked) {
+            if (!flow.interflowWaitfor.includes(waitforFlowId)) {
+                flow.interflowWaitfor.push(waitforFlowId);
+            }
+        } else {
+            flow.interflowWaitfor = flow.interflowWaitfor.filter(id => id !== waitforFlowId);
+        }
+
+        loadFlowSettings();
+        updateJsonPreview();
     }
 
     function renderAllFilesList() {
@@ -1046,6 +1128,23 @@ const App = (() => {
                 state.flowOrder = sanitizedFlowOrder;
                 state.currentFlowId = sanitizedFlows[data.currentFlowId] ? data.currentFlowId : sanitizedFlowOrder[0] || null;
                 state.nodeCounter = data.nodeCounter || 0;
+
+                Object.values(state.flows).forEach(flow => {
+                    if (Array.isArray(flow.interflowWaitfor)) {
+                        flow.interflowWaitfor = flow.interflowWaitfor.filter(id => state.flows[id] && state.flows[id].server === flow.server);
+                    } else if (typeof flow.waitfor === 'string' && flow.waitfor.trim()) {
+                        const names = flow.waitfor.split(',').map(item => item.trim()).filter(Boolean);
+                        flow.interflowWaitfor = Object.values(state.flows)
+                            .filter(candidate => candidate.server === flow.server && candidate.id !== flow.id)
+                            .filter(candidate => names.includes(candidate.filename) || names.includes(candidate.filename + '.json'))
+                            .map(candidate => candidate.id);
+                    } else {
+                        flow.interflowWaitfor = [];
+                    }
+
+                    delete flow.waitfor;
+                });
+
                 return true;
             }
         } catch (e) { /* ignore */ }
@@ -1307,7 +1406,7 @@ const App = (() => {
         renderCurrentFlow();
         updateFlowCount();
         updateJsonPreview();
-
+        renderInterflowDeps();
         renderAllFilesList();
         initKeyboard();
         setInterval(saveState, 5000);
@@ -1343,6 +1442,7 @@ const App = (() => {
         copyExternaJson,
         downloadExternaJson,
         bulkAddBuilds: withSave(bulkAddBuilds),
+        toggleInterflowDep: withSave(toggleInterflowDep),
         toggleBulkDrawer,
         closeBulkDrawer,
         addSqlRunner: withSave(addSqlRunner),
