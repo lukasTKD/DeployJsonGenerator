@@ -42,6 +42,7 @@
             <div class="tabs-wrapper">
                 <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity.mbank.pl</button>
                 <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
+                <button class="tab" data-server="ferryt" onclick="App.switchServer('ferryt')">Ferryt</button>
             </div>
         </div>
 
@@ -110,6 +111,7 @@
                             <button class="btn btn-primary" onclick="App.addNode()">+ Dodaj Build</button>
                             <button class="btn btn-secondary" id="btnAddSqlRunner" onclick="App.addSqlRunner()" style="display:none">+ Dodaj SQLRunner</button>
                             <button class="btn btn-secondary" id="btnAddScriptRunner" onclick="App.addScriptRunner()" style="display:none">+ Dodaj ScriptRunner</button>
+                            <button class="btn btn-secondary" id="btnAddFerrytBuild" onclick="App.openBuildCatalog()" style="display:none">+ Dodaj Build Ferrytowy</button>
                             <button class="btn btn-secondary" onclick="App.autoLayout()">Auto Layout</button>
                             <button class="btn btn-danger" onclick="App.clearCanvas()">Wyczyść</button>
                         </div>
@@ -195,6 +197,7 @@
                             <select id="externaServer">
                                 <option value="haaTeamCity">haaTeamCity.mbank.pl (https://haateamcity.mbank.pl)</option>
                                 <option value="teamcity">TeamCity.mbank.pl (https://teamcity.mbank.pl)</option>
+                                <option value="ferryt">Ferryt (https://teamcity.mbank.pl)</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -237,6 +240,22 @@
             </div>
         </div><!-- /externaMode -->
     </div><!-- /container -->
+
+    <div class="modal-overlay" id="buildCatalogModal" style="display:none;">
+        <div class="modal-box" style="width:760px;">
+            <div class="modal-header">
+                <h3>Buildy Ferryt</h3>
+                <button class="modal-close" onclick="App.closeBuildCatalog()">&times;</button>
+            </div>
+            <div class="modal-body" id="catalogBuildList">
+                <!-- Generated dynamically -->
+            </div>
+            <div class="modal-footer">
+                <span class="catalog-hint">Wypełnij wymagane pola i kliknij "Dodaj" przy wybranym buildzie.</span>
+                <button class="btn btn-secondary" onclick="App.closeBuildCatalog()">Zamknij</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Node Edit Modal -->
     <div class="modal-overlay" id="nodeEditModal" style="display:none;">
@@ -306,6 +325,11 @@
                         <label>file</label>
                         <input type="text" id="nodeEditPsFile" placeholder="np. deploy.ps1">
                     </div>
+                </div>
+
+                <div id="ferrytParams" class="tc-params-section" style="display:none;">
+                    <div class="tc-params-header">Parametry Ferryt</div>
+                    <div id="ferrytParamsFields"></div>
                 </div>
             </div>
             <div class="modal-footer">

@@ -7,8 +7,78 @@ const App = (() => {
     // ========== STATE ==========
     const SERVERS = {
         haaTeamCity: 'https://haateamcity.mbank.pl/',
-        teamcity: 'https://teamcity.mbank.pl/'
+        teamcity: 'https://teamcity.mbank.pl/',
+        ferryt: 'https://teamcity.mbank.pl/'
     };
+
+    const FERRYT_DEFAULTS = {
+        runat: '21:00',
+        email: 'hardcore@mbank.pl',
+        blackout: '1680|Ferryt,1696|BPM ServicePoint'
+    };
+
+    const FERRYT_BUILD_CATALOG = [
+        {
+            buildType: 'SQL',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_Sql_ProdDeployment',
+            fields: [
+                { key: 'deploy_PackageName', label: 'deploy_PackageName', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'SVAutoImport',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_SVAutoImport_ProdDeployment',
+            fields: [
+                { key: 'ImportProcessPackageName', label: 'ImportProcessPackageName', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'Restart serwisów',
+            buildId: 'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW',
+            fields: [
+                {
+                    key: 'todo',
+                    label: 'Akcja',
+                    required: true,
+                    type: 'select',
+                    defaultValue: 'Restart',
+                    options: [
+                        { value: 'Restart', label: 'restart' },
+                        { value: 'stop', label: 'stop' },
+                        { value: 'start', label: 'start' }
+                    ]
+                }
+            ]
+        },
+        {
+            buildType: 'BPM',
+            buildId: '',
+            fields: []
+        },
+        {
+            buildType: 'RenewApplication File',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment',
+            fields: [
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' },
+                { key: 'RenewAppTC', label: 'RenewAppTC', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'RenewApplication SQL',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment',
+            fields: [
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' },
+                { key: 'RenewAppSQLTC', label: 'RenewAppSQLTC', required: true, type: 'text' }
+            ]
+        },
+        {
+            buildType: 'RenewApplication Scenario',
+            buildId: 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment',
+            fields: [
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' }
+            ]
+        }
+    ];
 
     let state = {
         currentServer: 'haaTeamCity',
@@ -27,6 +97,74 @@ const App = (() => {
         return currentUsername
             ? 'deployJsonGenerator_' + currentUsername
             : 'deployJsonGenerator';
+    }
+
+    function isFerrytServer(server = state.currentServer) {
+        return server === 'ferryt';
+    }
+
+    function getFerrytCatalogItem(buildType) {
+        return FERRYT_BUILD_CATALOG.find(item => item.buildType === buildType) || null;
+    }
+
+    function applyFerrytFlowDefaults(flow) {
+        if (!flow || !isFerrytServer(flow.server)) return;
+        flow.runat = flow.runat || FERRYT_DEFAULTS.runat;
+        flow.email = flow.email || FERRYT_DEFAULTS.email;
+        flow.blackout = flow.blackout || FERRYT_DEFAULTS.blackout;
+        if (!flow.filename || !flow.filename.trim()) {
+            flow.filename = 'ferryt_deploy_' + ((state.flowOrder.indexOf(flow.id) + 1) || 1);
+        }
+    }
+
+    function normalizeFerrytNode(node) {
+        if (!node) return;
+
+        const params = { ...(node.params || {}) };
+        let ferrytType = node.ferrytType || '';
+
+        if (params.buildPropertyName) {
+            const dynamicKey = params.buildPropertyName;
+            if (params.buildPropertyValue) {
+                params[dynamicKey] = params.buildPropertyValue;
+            }
+            delete params.buildPropertyName;
+            delete params.buildPropertyValue;
+        }
+
+        if (params.renewAppTC) {
+            if (params.renewAppTC === 'RenewAppSQLTC' && !params.RenewAppSQLTC) {
+                params.RenewAppSQLTC = params.renewAppTC;
+            } else if (!params.RenewAppTC) {
+                params.RenewAppTC = params.renewAppTC;
+            }
+            delete params.renewAppTC;
+        }
+
+        if (!ferrytType) {
+            if ('deploy_PackageName' in params) {
+                ferrytType = 'SQL';
+            } else if ('ImportProcessPackageName' in params) {
+                ferrytType = 'SVAutoImport';
+            } else if ('todo' in params || node.buildid === 'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW') {
+                ferrytType = 'Restart serwisów';
+            } else if ('RenewAppFileNameTC' in params && 'RenewAppSQLTC' in params) {
+                ferrytType = 'RenewApplication SQL';
+            } else if ('RenewAppFileNameTC' in params && 'RenewAppTC' in params) {
+                ferrytType = 'RenewApplication File';
+            } else if ('RenewAppFileNameTC' in params) {
+                ferrytType = 'RenewApplication Scenario';
+            } else if (!node.buildid) {
+                ferrytType = 'BPM';
+            }
+        }
+
+        node.ferrytType = ferrytType;
+        if (Object.keys(params).length > 0) {
+            node.params = params;
+        } else {
+            delete node.params;
+        }
     }
 
     // ========== TIME OPTIONS (runat) ==========
@@ -59,14 +197,15 @@ const App = (() => {
 
     function addFlow() {
         const id = 'flow_' + Date.now();
+        const ferryt = isFerrytServer();
         state.flows[id] = {
             id,
-            filename: 'deploy_' + (state.flowOrder.length + 1),
+            filename: ferryt ? 'ferryt_deploy_' + (state.flowOrder.length + 1) : 'deploy_' + (state.flowOrder.length + 1),
             server: state.currentServer,
             enabled: 1,
-            runat: '18:00',
-            email: '',
-            blackout: '',
+            runat: ferryt ? FERRYT_DEFAULTS.runat : '18:00',
+            email: ferryt ? FERRYT_DEFAULTS.email : '',
+            blackout: ferryt ? FERRYT_DEFAULTS.blackout : '',
             sms: '',
             change: '',
             nodes: {},
@@ -180,6 +319,7 @@ const App = (() => {
         const flow = getCurrentFlow();
         if (!flow) return;
         flow[key] = value;
+        applyFerrytFlowDefaults(flow);
         if (key === 'filename') {
             renderFlowTabs();
             renderInterflowDeps();
@@ -202,6 +342,7 @@ const App = (() => {
             document.getElementById('flowEnabled').value = '1';
             return;
         }
+        applyFerrytFlowDefaults(flow);
         document.getElementById('flowFilename').value = flow.filename || '';
         document.getElementById('flowRunat').value = flow.runat || '';
         document.getElementById('flowWaitfor').value = getInterflowWaitforNames(flow).join(', ') || '';
@@ -271,6 +412,76 @@ const App = (() => {
         }
     }
 
+    function renderFerrytParamsFields(buildType, params = {}) {
+        const section = document.getElementById('ferrytParams');
+        const container = document.getElementById('ferrytParamsFields');
+        if (!section || !container) return;
+
+        const item = getFerrytCatalogItem(buildType);
+        if (!isFerrytServer() || !item || item.fields.length === 0) {
+            section.style.display = 'none';
+            container.innerHTML = '';
+            return;
+        }
+
+        section.style.display = '';
+        container.innerHTML = item.fields.map(field => {
+            const inputId = `nodeEditFerryt_${field.key}`;
+            const currentValue = params[field.key] || field.defaultValue || '';
+
+            if (field.type === 'select') {
+                const options = field.options.map(option => {
+                    const selected = currentValue === option.value ? 'selected' : '';
+                    return `<option value="${escapeHtml(option.value)}" ${selected}>${escapeHtml(option.label)}</option>`;
+                }).join('');
+
+                return `
+                    <div class="form-group">
+                        <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+                        <select id="${inputId}">
+                            ${options}
+                        </select>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="form-group">
+                    <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+                    <input type="text" id="${inputId}" value="${escapeHtml(currentValue)}" placeholder="${escapeHtml(field.label)}">
+                </div>
+            `;
+        }).join('');
+    }
+
+    function getFerrytParamsFromModal(buildType) {
+        const item = getFerrytCatalogItem(buildType);
+        if (!item) {
+            return { params: {}, missingFieldId: null, missingLabel: null };
+        }
+
+        const params = {};
+        for (const field of item.fields) {
+            const input = document.getElementById(`nodeEditFerryt_${field.key}`);
+            const value = input ? input.value.trim() : '';
+            const finalValue = value || field.defaultValue || '';
+
+            if (field.required && !finalValue) {
+                return {
+                    params: {},
+                    missingFieldId: input ? input.id : null,
+                    missingLabel: field.label
+                };
+            }
+
+            if (finalValue) {
+                params[field.key] = finalValue;
+            }
+        }
+
+        return { params, missingFieldId: null, missingLabel: null };
+    }
+
     // ========== VALIDATORS ==========
 
     function validateNodeName(flow, name, excludeNodeId) {
@@ -282,6 +493,7 @@ const App = (() => {
 
     function validateBuildId(flow, buildid, excludeNodeId) {
         if (!buildid) return null; // empty is allowed (placeholder used)
+        if (isFerrytServer(flow.server)) return null;
         // TC_SQL and TC_PowerShell can be duplicated (same buildid, different name)
         if (isTcSql(buildid) || isTcPowerShell(buildid)) return null;
         const duplicate = Object.values(flow.nodes).find(
@@ -335,6 +547,7 @@ const App = (() => {
             retry: config.retry ?? '1',
             external: config.external || '',
             stop: config.stop || '',
+            ferrytType: config.ferrytType || '',
             x: position.x,
             y: position.y,
             params: config.params && Object.keys(config.params).length > 0 ? { ...config.params } : undefined
@@ -652,6 +865,9 @@ const App = (() => {
         if (!flow || !flow.nodes[nodeId]) return;
         state.editingNodeId = nodeId;
         const node = flow.nodes[nodeId];
+        if (isFerrytServer()) {
+            normalizeFerrytNode(node);
+        }
 
         document.getElementById('nodeEditName').value = node.name || '';
         document.getElementById('nodeEditBuildId').value = node.buildid || '';
@@ -664,6 +880,7 @@ const App = (() => {
         // Show/hide TC params and load values
         updateTcParamsVisibility(node.buildid || '');
         loadTcParams(node);
+        renderFerrytParamsFields(node.ferrytType, node.params || {});
 
         // Listen for buildid changes to toggle TC params
         const buildIdInput = document.getElementById('nodeEditBuildId');
@@ -704,6 +921,14 @@ const App = (() => {
             return;
         }
 
+        if (isFerrytServer() && node.ferrytType) {
+            const ferrytValidation = getFerrytParamsFromModal(node.ferrytType);
+            if (ferrytValidation.missingLabel) {
+                showValidationError(ferrytValidation.missingFieldId, `Uzupełnij ${ferrytValidation.missingLabel}`);
+                return;
+            }
+        }
+
         node.name = newName;
         node.buildid = newBuildId;
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
@@ -713,6 +938,14 @@ const App = (() => {
 
         // Save TC params
         saveTcParams(node);
+        if (isFerrytServer() && node.ferrytType) {
+            const ferrytParams = getFerrytParamsFromModal(node.ferrytType).params;
+            if (Object.keys(ferrytParams).length > 0) {
+                node.params = ferrytParams;
+            } else {
+                delete node.params;
+            }
+        }
 
         // Update waitfor references if name changed
         if (oldName !== newName) {
@@ -729,6 +962,10 @@ const App = (() => {
     function showValidationError(inputId, message) {
         clearValidation();
         const input = document.getElementById(inputId);
+        if (!input) {
+            showToast(message, 'error');
+            return;
+        }
         input.classList.add('validation-error');
         const msg = document.createElement('div');
         msg.className = 'validation-msg';
@@ -1143,6 +1380,10 @@ const App = (() => {
                     }
 
                     delete flow.waitfor;
+                    applyFerrytFlowDefaults(flow);
+                    if (isFerrytServer(flow.server)) {
+                        Object.values(flow.nodes || {}).forEach(normalizeFerrytNode);
+                    }
                 });
 
                 return true;
@@ -1258,10 +1499,113 @@ const App = (() => {
 
     function updateServerSpecificUI() {
         const isHaaTeamCity = state.currentServer === 'haaTeamCity';
+        const ferryt = isFerrytServer();
         const sqlRunnerBtn = document.getElementById('btnAddSqlRunner');
         const scriptRunnerBtn = document.getElementById('btnAddScriptRunner');
+        const ferrytBuildBtn = document.getElementById('btnAddFerrytBuild');
         if (sqlRunnerBtn) sqlRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
         if (scriptRunnerBtn) scriptRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
+        if (ferrytBuildBtn) ferrytBuildBtn.style.display = ferryt ? '' : 'none';
+    }
+
+    function openBuildCatalog() {
+        const flow = getCurrentFlow();
+        if (!flow || !isFerrytServer()) return;
+
+        const modal = document.getElementById('buildCatalogModal');
+        const list = document.getElementById('catalogBuildList');
+        if (!modal || !list) return;
+
+        const existingCounts = {};
+        Object.values(flow.nodes).forEach(node => {
+            if (node.ferrytType) {
+                existingCounts[node.ferrytType] = (existingCounts[node.ferrytType] || 0) + 1;
+            }
+        });
+
+        list.innerHTML = FERRYT_BUILD_CATALOG.map((item, idx) => {
+            const count = existingCounts[item.buildType] || 0;
+            const countBadge = count > 0 ? `<span class="catalog-count-badge">x${count} w flow</span>` : '';
+            const fieldInputs = item.fields.map(field => {
+                const inputId = `catalogParam_${idx}_${field.key}`;
+                if (field.type === 'select') {
+                    const options = field.options.map(option => {
+                        const selected = option.value === (field.defaultValue || '') ? 'selected' : '';
+                        return `<option value="${escapeHtml(option.value)}" ${selected}>${escapeHtml(option.label)}</option>`;
+                    }).join('');
+                    return `
+                        <div class="catalog-param">
+                            <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+                            <select id="${inputId}" class="catalog-param-input">
+                                ${options}
+                            </select>
+                        </div>
+                    `;
+                }
+
+                return `
+                    <div class="catalog-param">
+                        <label>${escapeHtml(field.label)}${field.required ? ' *' : ''}</label>
+                        <input type="text" id="${inputId}" class="catalog-param-input" placeholder="${escapeHtml(field.label)}">
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="catalog-item">
+                    <div class="catalog-item-info">
+                        <div class="catalog-item-type">${escapeHtml(item.buildType)} ${countBadge}</div>
+                        <div class="catalog-item-id">${escapeHtml(item.buildId || '(brak buildid)')}</div>
+                    </div>
+                    <div class="catalog-params-group">${fieldInputs || '<div class="catalog-param-empty">Brak dodatkowych parametrów</div>'}</div>
+                    <button class="btn btn-primary btn-sm catalog-add-btn" onclick="App.addFromCatalog(${idx})">Dodaj</button>
+                </div>
+            `;
+        }).join('');
+
+        modal.style.display = 'flex';
+    }
+
+    function closeBuildCatalog() {
+        const modal = document.getElementById('buildCatalogModal');
+        if (modal) modal.style.display = 'none';
+    }
+
+    function addFromCatalog(index) {
+        const flow = getCurrentFlow();
+        if (!flow || !isFerrytServer()) return;
+
+        const item = FERRYT_BUILD_CATALOG[index];
+        if (!item) return;
+
+        const params = {};
+        for (const field of item.fields) {
+            const input = document.getElementById(`catalogParam_${index}_${field.key}`);
+            const value = input ? input.value.trim() : '';
+            const finalValue = value || field.defaultValue || '';
+
+            if (field.required && !finalValue) {
+                showToast(`Uzupełnij ${field.label}`, 'error');
+                if (input) input.focus();
+                return;
+            }
+
+            if (finalValue) {
+                params[field.key] = finalValue;
+            }
+        }
+
+        const nodeId = addNodeWithConfig({
+            name: getUniqueNodeName(flow, item.buildType),
+            buildid: item.buildId,
+            ferrytType: item.buildType,
+            params
+        });
+
+        if (!nodeId) return;
+
+        closeBuildCatalog();
+        showToast(`Dodano build: ${item.buildType}`, 'success');
     }
 
     // ========== EXTERNA MODE ==========
@@ -1373,6 +1717,7 @@ const App = (() => {
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeNodeModal();
             if (e.key === 'Escape') closeBulkDrawer();
+            if (e.key === 'Escape') closeBuildCatalog();
             if (e.key === 'Delete' && state.editingNodeId) deleteNode();
         });
     }
@@ -1445,6 +1790,9 @@ const App = (() => {
         toggleInterflowDep: withSave(toggleInterflowDep),
         toggleBulkDrawer,
         closeBulkDrawer,
+        openBuildCatalog,
+        closeBuildCatalog,
+        addFromCatalog: withSave(addFromCatalog),
         addSqlRunner: withSave(addSqlRunner),
         addScriptRunner: withSave(addScriptRunner)
     };
