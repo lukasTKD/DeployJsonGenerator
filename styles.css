@@ -1072,6 +1072,72 @@ body {
     overflow-y: auto;
 }
 
+/* Build Catalog (Ferryt) */
+.catalog-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 12px;
+    background: #f8f9fa;
+    border-radius: 6px;
+    border: 1px solid #eee;
+}
+
+.catalog-item-added {
+    opacity: 0.5;
+}
+
+.catalog-item-info {
+    flex: 1;
+}
+
+.catalog-item-type {
+    font-weight: 600;
+    font-size: 13px;
+    color: #333;
+}
+
+.catalog-item-id {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    color: #666;
+    margin-top: 2px;
+    word-break: break-all;
+}
+
+.catalog-item-detail {
+    font-size: 10px;
+    color: #999;
+    margin-top: 2px;
+}
+
+.catalog-hint {
+    font-size: 12px;
+    color: #999;
+}
+
+#btnBuildCatalog {
+    background: #ff6600;
+    color: #fff;
+    border: none;
+}
+
+#btnBuildCatalog:hover {
+    background: #e55c00;
+    box-shadow: 0 2px 6px rgba(255, 102, 0, 0.3);
+}
+
+#btnValidateArtifactory {
+    background: #1565c0;
+    color: #fff;
+    border: none;
+}
+
+#btnValidateArtifactory:hover {
+    background: #0d47a1;
+    box-shadow: 0 2px 6px rgba(21, 101, 192, 0.3);
+}
+
 /* Responsive */
 @media (max-width: 1200px) {
     .main-content {
