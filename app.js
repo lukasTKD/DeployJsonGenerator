@@ -25,6 +25,9 @@ const App = (() => {
 
     const AUTO_SAVE_ROOT = 'D:\\PROD_REPO_DATA\\AutomateDeploy\\Deploys';
     const ENABLE_ACTIVITY_LOG = false;
+    const HANDLE_DB_NAME = 'deploy-json-generator-fs';
+    const HANDLE_STORE_NAME = 'handles';
+    const DEPLOYS_ROOT_HANDLE_KEY = 'deploy-root';
     const APP_BASE_URL = (() => {
         const scriptTag = document.currentScript || document.querySelector('script[src$="app.js"]');
         const source = scriptTag && scriptTag.src ? scriptTag.src : window.location.href;
@@ -132,6 +135,7 @@ const App = (() => {
     let currentUsername = '';
     let editingFerrytType = '';
     let loggingDisabled = false;
+    let deployRootHandleCache = null;
 
     function buildAppUrl(path) {
         return new URL(path, APP_BASE_URL).toString();
@@ -1614,6 +1618,94 @@ const App = (() => {
 
     // ========== SAVE / DOWNLOAD ==========
 
+    function openHandleDb() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(HANDLE_DB_NAME, 1);
+            request.onupgradeneeded = () => {
+                request.result.createObjectStore(HANDLE_STORE_NAME);
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error || new Error('Nie udało się otworzyć IndexedDB.'));
+        });
+    }
+
+    async function getStoredDeployRootHandle() {
+        if (deployRootHandleCache) return deployRootHandleCache;
+        const db = await openHandleDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(HANDLE_STORE_NAME, 'readonly');
+            const store = tx.objectStore(HANDLE_STORE_NAME);
+            const request = store.get(DEPLOYS_ROOT_HANDLE_KEY);
+            request.onsuccess = () => {
+                deployRootHandleCache = request.result || null;
+                resolve(deployRootHandleCache);
+            };
+            request.onerror = () => reject(request.error || new Error('Nie udało się odczytać katalogu bazowego.'));
+        });
+    }
+
+    async function setStoredDeployRootHandle(handle) {
+        deployRootHandleCache = handle;
+        const db = await openHandleDb();
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction(HANDLE_STORE_NAME, 'readwrite');
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error || new Error('Nie udało się zapisać katalogu bazowego.'));
+            tx.objectStore(HANDLE_STORE_NAME).put(handle, DEPLOYS_ROOT_HANDLE_KEY);
+        });
+    }
+
+    async function ensureDirectoryHandlePermission(handle, askUser = false) {
+        if (!handle) return false;
+        const options = { mode: 'readwrite' };
+        const current = await handle.queryPermission(options);
+        if (current === 'granted') return true;
+        if (!askUser) return false;
+        return (await handle.requestPermission(options)) === 'granted';
+    }
+
+    async function getDeployRootHandle() {
+        if (!window.isSecureContext || typeof window.showDirectoryPicker !== 'function') {
+            throw new Error('Lokalny zapis działa tylko w Edge/Chrome uruchomionym przez http://localhost lub https.');
+        }
+
+        let handle = await getStoredDeployRootHandle();
+        if (handle && await ensureDirectoryHandlePermission(handle, true)) {
+            return handle;
+        }
+
+        showToast(`Wskaż katalog bazowy ${AUTO_SAVE_ROOT}`, 'info');
+        handle = await window.showDirectoryPicker({
+            id: 'deploy-root',
+            mode: 'readwrite'
+        });
+
+        if (!await ensureDirectoryHandlePermission(handle, true)) {
+            throw new Error('Brak uprawnienia zapisu do wybranego katalogu.');
+        }
+
+        await setStoredDeployRootHandle(handle);
+        return handle;
+    }
+
+    async function saveFilesToLocalDeployFolder(exportDate, files) {
+        const rootHandle = await getDeployRootHandle();
+        const dateFolderHandle = await rootHandle.getDirectoryHandle(exportDate, { create: true });
+
+        for (const file of files) {
+            const fileHandle = await dateFolderHandle.getFileHandle(file.filename, { create: true });
+            const writable = await fileHandle.createWritable();
+            await writable.write(file.content);
+            await writable.close();
+        }
+
+        return {
+            ok: true,
+            saved: files.length,
+            directory: `${AUTO_SAVE_ROOT}\\${exportDate}`
+        };
+    }
+
     async function saveFilesToDeploy(files, successMessage, logType, logDetails = {}) {
         if (!files || files.length === 0) {
             showToast('Brak plików do zapisania', 'error');
@@ -1625,15 +1717,7 @@ const App = (() => {
         updateAutoSaveStatus(`Zapisywanie do: ${targetDir}`, false, targetDir);
 
         try {
-            const result = await postDeploySaveRequest({
-                exportDate,
-                server: state.currentServer,
-                files
-            });
-            const data = result.data || {};
-            if (!result.ok || !data.ok) {
-                throw new Error(data.error || `Blad zapisu (${result.status})`);
-            }
+            const data = await saveFilesToLocalDeployFolder(exportDate, files);
             updateAutoSaveStatus(`Zapisano do: ${data.directory || targetDir}`, false, data.directory || targetDir);
             showToast(successMessage || 'Plik zapisany', 'success');
             logEvent(logType, {
@@ -1804,7 +1888,7 @@ const App = (() => {
         const input = document.getElementById('deployFolderDate');
         if (input) input.value = state.exportDate;
         const targetDir = `${AUTO_SAVE_ROOT}\\${state.exportDate}`;
-        updateAutoSaveStatus(`Wybrany folder: ${targetDir}`, false, targetDir);
+        updateAutoSaveStatus(`Wybrany folder: ${targetDir} (zapis wybierze katalog bazowy)`, false, targetDir);
     }
 
     function collectAutoSaveFiles(serverFlows) {
@@ -1816,64 +1900,6 @@ const App = (() => {
                 content: formatJson(generateJson(flow))
             };
         });
-    }
-
-    async function parseAutoSaveResponse(response) {
-        const raw = await response.text();
-        if (!raw) {
-            return { ok: response.ok };
-        }
-
-        try {
-            return JSON.parse(raw);
-        } catch (error) {
-            throw new Error(`Serwer zwrocil niepoprawna odpowiedz (${response.status}).`);
-        }
-    }
-
-    function postDeploySaveRequestXhr(url, body, originalError = null) {
-        return new Promise((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', url, true);
-            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
-            xhr.onreadystatechange = () => {
-                if (xhr.readyState !== 4) return;
-
-                const responseLike = {
-                    ok: xhr.status >= 200 && xhr.status < 300,
-                    status: xhr.status,
-                    text: async () => xhr.responseText || ''
-                };
-
-                parseAutoSaveResponse(responseLike)
-                    .then(data => resolve({ ok: responseLike.ok, status: xhr.status, data }))
-                    .catch(error => reject(originalError || error));
-            };
-            xhr.onerror = () => reject(originalError || new Error('Błąd połączenia z endpointem zapisu.'));
-            xhr.send(body);
-        });
-    }
-
-    async function postDeploySaveRequest(payload) {
-        const url = buildAppUrl('save-deploys.aspx');
-        const body = new URLSearchParams({
-            payload: JSON.stringify(payload)
-        }).toString();
-
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
-                },
-                credentials: 'same-origin',
-                body
-            });
-            const data = await parseAutoSaveResponse(response);
-            return { ok: response.ok, status: response.status, data };
-        } catch (error) {
-            return postDeploySaveRequestXhr(url, body, error);
-        }
     }
 
     // ========== SAVE/LOAD STATE (localStorage) ==========
@@ -2505,7 +2531,7 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        updateAutoSaveStatus(`Wybrany folder: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
+        updateAutoSaveStatus(`Wybrany folder: ${AUTO_SAVE_ROOT}\\${state.exportDate} (zapis wybierze katalog bazowy)`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
         // Live build count for externa
