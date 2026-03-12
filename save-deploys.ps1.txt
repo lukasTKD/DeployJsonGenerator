@@ -23,7 +23,8 @@ function Write-JsonResponse {
 }
 
 try {
-    if (($env:REQUEST_METHOD ?? '') -ne 'POST') {
+    $requestMethod = if ($null -ne $env:REQUEST_METHOD) { $env:REQUEST_METHOD } else { '' }
+    if ($requestMethod -ne 'POST') {
         Write-JsonResponse -StatusCode 405 -Payload @{
             ok = $false
             error = 'Uzyj metody POST.'
