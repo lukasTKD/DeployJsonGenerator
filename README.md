@@ -75,7 +75,8 @@ Serwer Ferryt ma dodatkowe domyslne wartosci flow:
 
 - `runat: 21:00`
 - `email: hardcore@mbank.pl`
-- `blackout: "1680|Ferryt","1696|BPM ServicePoint"`
+- `blackout: "1680|Ferryt","1696|BPM Service"`
+- `filename: Ferryt_<change>`
 
 ## 5. Praca z flow
 
@@ -97,6 +98,7 @@ Wazne zasady:
 - flow sa rozdzielone per serwer
 - usuniecie flow usuwa tez referencje `interflowWaitfor`
 - `waitfor` na poziomie flow jest wyliczany z zaznaczonych zaleznosci miedzy plikami
+- pliki JSON sa automatycznie zapisywane do `D:\PROD_REPO_DATA\AutomateDeploy\Deploys\yyyy-MM-dd`
 
 ## 6. Praca z buildami na diagramie
 
@@ -106,14 +108,12 @@ Node zawiera m.in.:
 - `buildid`
 - `enabled`
 - `waitfor`
-- `retry`
-- `external`
 - `stop`
 - `runnerType`
 - `ferrytType`
 - `params`
 
-Zaleznosci miedzy buildami ustawia sie przez przeciagniecie polaczenia z jednego node'a na drugi. Node docelowy otrzymuje `waitfor` wskazujacy nazwe poprzedniego builda.
+Zaleznosci miedzy buildami ustawia sie przez przeciagniecie polaczenia z jednego node'a na drugi. Node docelowy otrzymuje `waitfor` wskazujacy nazwe poprzedniego builda, ale samo pole `waitfor` nie jest wyswietlane w edycji builda.
 
 ## 7. Szybkie buildy
 
@@ -244,6 +244,7 @@ Zasady generacji:
 - `enabled` jest brany z flow
 - `waitfor` na poziomie flow pochodzi z `interflowWaitfor`
 - `builds` sa generowane z uporzadkowanej listy node'ow
+- build nie zawiera juz pol `retry` i `external`
 - `params` sa dolaczane tylko, gdy po sanitizacji pozostaja niepuste
 
 Przykladowy wynik:

@@ -20,8 +20,10 @@ const App = (() => {
     const FERRYT_DEFAULTS = {
         runat: '21:00',
         email: 'hardcore@mbank.pl',
-        blackout: '"1680|Ferryt","1696|BPM ServicePoint"'
+        blackout: '"1680|Ferryt","1696|BPM Service"'
     };
+
+    const AUTO_SAVE_ROOT = 'D:\\PROD_REPO_DATA\\AutomateDeploy\\Deploys';
 
     const FERRYT_BUILD_CATALOG = [
         {
@@ -114,6 +116,7 @@ const App = (() => {
         flows: {},
         flowOrder: [],
         nodeCounter: 0,
+        exportDate: '',
         editingNodeId: null,
         pendingNewNodeId: null,
         dragging: null,
@@ -122,6 +125,28 @@ const App = (() => {
 
     let currentUsername = '';
     let editingFerrytType = '';
+    let autoSaveTimer = null;
+    let lastAutoSaveSignature = '';
+    let autoSaveRequestSeq = 0;
+
+    function getTodayIsoDate() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    function sanitizeWindowsFileName(value) {
+        return (value || '')
+            .trim()
+            .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
+    }
+
+    function syncFerrytFilename(flow) {
+        if (!flow || !isFerrytServer(flow.server)) return;
+        flow.filename = `Ferryt_${sanitizeWindowsFileName(flow.change || '')}`;
+    }
 
     function stringifyLogDetails(details) {
         if (details === null || details === undefined) return '';
@@ -176,9 +201,7 @@ const App = (() => {
         flow.runat = flow.runat || FERRYT_DEFAULTS.runat;
         flow.email = flow.email || FERRYT_DEFAULTS.email;
         flow.blackout = flow.blackout || FERRYT_DEFAULTS.blackout;
-        if (!flow.filename || !flow.filename.trim()) {
-            flow.filename = 'ferryt_deploy_' + ((state.flowOrder.indexOf(flow.id) + 1) || 1);
-        }
+        syncFerrytFilename(flow);
     }
 
     function normalizeFerrytNode(node) {
@@ -264,7 +287,7 @@ const App = (() => {
         const ferryt = isFerrytServer();
         state.flows[id] = {
             id,
-            filename: ferryt ? 'ferryt_deploy_' + (state.flowOrder.length + 1) : 'deploy_' + (state.flowOrder.length + 1),
+            filename: ferryt ? 'Ferryt_' : 'deploy_' + (state.flowOrder.length + 1),
             server: state.currentServer,
             enabled: 1,
             runat: ferryt ? FERRYT_DEFAULTS.runat : '18:00',
@@ -373,6 +396,7 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
+        scheduleAutoSave();
         logEvent('SERVER_SWITCH', server);
     }
 
@@ -395,7 +419,7 @@ const App = (() => {
         if (!flow) return;
         flow[key] = value;
         applyFerrytFlowDefaults(flow);
-        if (key === 'filename') {
+        if (key === 'filename' || key === 'change') {
             renderFlowTabs();
             renderInterflowDeps();
         }
@@ -411,9 +435,12 @@ const App = (() => {
 
     function loadFlowSettings() {
         const flow = getCurrentFlow();
+        const filenameInput = document.getElementById('flowFilename');
         populateRunatSelect();
         if (!flow) {
-            document.getElementById('flowFilename').value = '';
+            filenameInput.value = '';
+            filenameInput.readOnly = false;
+            filenameInput.title = '';
             document.getElementById('flowRunat').value = '';
             document.getElementById('flowWaitfor').value = '';
             document.getElementById('flowEmail').value = '';
@@ -424,7 +451,11 @@ const App = (() => {
             return;
         }
         applyFerrytFlowDefaults(flow);
-        document.getElementById('flowFilename').value = flow.filename || '';
+        filenameInput.value = flow.filename || '';
+        filenameInput.readOnly = isFerrytServer(flow.server);
+        filenameInput.title = isFerrytServer(flow.server)
+            ? 'Dla Ferryt nazwa pliku jest budowana automatycznie z pola change.'
+            : '';
         document.getElementById('flowRunat').value = flow.runat || '';
         document.getElementById('flowWaitfor').value = getInterflowWaitforNames(flow).join(', ') || '';
         document.getElementById('flowEmail').value = flow.email || '';
@@ -719,8 +750,6 @@ const App = (() => {
             buildid: config.buildid || '',
             enabled: config.enabled ?? 1,
             waitfor: config.waitfor || '',
-            retry: config.retry ?? '1',
-            external: config.external || '',
             stop: config.stop || '',
             ferrytType: config.ferrytType || '',
             runnerType: config.runnerType || '',
@@ -861,7 +890,6 @@ const App = (() => {
                 <div class="node-buildid">${escapeHtml(node.buildid) || '<em style="color:#999">buildid...</em>'}</div>
                 <div class="node-status">
                     <span class="${statusClass}">${statusText}</span>
-                    ${node.waitfor ? ' | waitfor: ' + escapeHtml(node.waitfor) : ''}
                 </div>
             </div>
             <div class="connector out" title="Przeciągnij w dół aby połączyć"></div>
@@ -1088,8 +1116,8 @@ const App = (() => {
         document.getElementById('nodeEditBuildId').value = node.buildid || '';
         document.getElementById('nodeEditEnabled').value = node.enabled;
         document.getElementById('nodeEditWaitfor').value = node.waitfor || '';
-        document.getElementById('nodeEditRetry').value = node.retry || '';
-        document.getElementById('nodeEditExternal').value = node.external || '';
+        document.getElementById('nodeEditRetry').value = '';
+        document.getElementById('nodeEditExternal').value = '';
         document.getElementById('nodeEditStop').value = node.stop || '';
 
         // Show/hide TC params and load values
@@ -1191,8 +1219,8 @@ const App = (() => {
         node.name = newName;
         node.buildid = newBuildId;
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
-        node.retry = document.getElementById('nodeEditRetry').value.trim();
-        node.external = document.getElementById('nodeEditExternal').value.trim();
+        delete node.retry;
+        delete node.external;
         node.stop = document.getElementById('nodeEditStop').value.trim();
         if (isFerrytServer()) {
             node.ferrytType = activeFerrytType;
@@ -1365,8 +1393,6 @@ const App = (() => {
             if (node.waitfor) build.waitfor = node.waitfor;
             build.enabled = node.enabled;
             build.buildid = node.buildid || 'NAZWA_BUILDA';
-            if (node.retry) build.retry = node.retry;
-            if (node.external) build.external = node.external;
             if (node.stop) build.stop = node.stop;
             // TC params
             const sanitizedParams = sanitizeParams(node.params || {});
@@ -1590,11 +1616,12 @@ const App = (() => {
     }
 
     function downloadJsonFile(filename, jsonObj) {
+        const baseName = sanitizeWindowsFileName((filename || '').replace(/\.json$/i, '')) || 'deploy';
         const blob = new Blob([formatJson(jsonObj)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = `${baseName}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1656,6 +1683,102 @@ const App = (() => {
         setTimeout(() => toast.remove(), 3000);
     }
 
+    function updateAutoSaveStatus(message, isError = false, title = '') {
+        const status = document.getElementById('autoSaveStatus');
+        if (!status) return;
+        status.textContent = message;
+        status.title = title || message;
+        status.classList.toggle('error', isError);
+    }
+
+    function updateExportDate(value) {
+        state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : getTodayIsoDate();
+        const input = document.getElementById('deployFolderDate');
+        if (input) input.value = state.exportDate;
+        lastAutoSaveSignature = '';
+        const targetDir = `${AUTO_SAVE_ROOT}\\${state.exportDate}`;
+        updateAutoSaveStatus(`Autozapis: ${state.exportDate}`, false, targetDir);
+        scheduleAutoSave(true);
+    }
+
+    function collectAutoSaveFiles(serverFlows) {
+        return serverFlows.map(flow => {
+            applyFerrytFlowDefaults(flow);
+            const safeName = sanitizeWindowsFileName(flow.filename || 'deploy') || 'deploy';
+            return {
+                filename: `${safeName}.json`,
+                content: formatJson(generateJson(flow))
+            };
+        });
+    }
+
+    async function parseAutoSaveResponse(response) {
+        const raw = await response.text();
+        if (!raw) {
+            return { ok: response.ok };
+        }
+
+        try {
+            return JSON.parse(raw);
+        } catch (error) {
+            throw new Error(`Serwer zwrocil niepoprawna odpowiedz (${response.status}).`);
+        }
+    }
+
+    function scheduleAutoSave(force = false) {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(() => {
+            executeAutoSave(force);
+        }, 400);
+    }
+
+    async function executeAutoSave(force = false) {
+        const serverFlows = getServerFlows();
+        if (serverFlows.length === 0) {
+            updateAutoSaveStatus('Autozapis: brak flow');
+            return;
+        }
+
+        const exportDate = state.exportDate || getTodayIsoDate();
+        const files = collectAutoSaveFiles(serverFlows);
+        const targetDir = `${AUTO_SAVE_ROOT}\\${exportDate}`;
+        const payload = {
+            exportDate,
+            server: state.currentServer,
+            files
+        };
+        const signature = JSON.stringify(payload);
+        if (!force && signature === lastAutoSaveSignature) {
+            updateAutoSaveStatus(`Autozapis: ${exportDate} (${files.length})`, false, targetDir);
+            return;
+        }
+
+        const requestSeq = ++autoSaveRequestSeq;
+        updateAutoSaveStatus('Autozapis: zapisywanie...', false, targetDir);
+
+        try {
+            const response = await fetch('save-deploys.aspx', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+            const data = await parseAutoSaveResponse(response);
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || `Blad zapisu (${response.status})`);
+            }
+            if (requestSeq !== autoSaveRequestSeq) return;
+
+            lastAutoSaveSignature = signature;
+            updateAutoSaveStatus(`Autozapis: ${exportDate} (${files.length})`, false, data.directory || targetDir);
+        } catch (error) {
+            if (requestSeq !== autoSaveRequestSeq) return;
+            updateAutoSaveStatus('Autozapis: blad', true, targetDir);
+            showToast(`Autozapis nieudany: ${error.message}`, 'error');
+        }
+    }
+
     // ========== SAVE/LOAD STATE (localStorage) ==========
 
     function saveState() {
@@ -1665,7 +1788,8 @@ const App = (() => {
                 currentFlowId: state.currentFlowId,
                 flows: state.flows,
                 flowOrder: state.flowOrder,
-                nodeCounter: state.nodeCounter
+                nodeCounter: state.nodeCounter,
+                exportDate: state.exportDate || getTodayIsoDate()
             }));
         } catch (e) { /* ignore */ }
     }
@@ -1689,6 +1813,7 @@ const App = (() => {
                 state.flowOrder = sanitizedFlowOrder;
                 state.currentFlowId = sanitizedFlows[data.currentFlowId] ? data.currentFlowId : sanitizedFlowOrder[0] || null;
                 state.nodeCounter = data.nodeCounter || 0;
+                state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(data.exportDate || '') ? data.exportDate : getTodayIsoDate();
 
                 Object.values(state.flows).forEach(flow => {
                     if (Array.isArray(flow.interflowWaitfor)) {
@@ -1706,13 +1831,23 @@ const App = (() => {
                     delete flow.waitfor;
                     applyFerrytFlowDefaults(flow);
                     if (isFerrytServer(flow.server)) {
-                        Object.values(flow.nodes || {}).forEach(normalizeFerrytNode);
+                        Object.values(flow.nodes || {}).forEach(node => {
+                            delete node.retry;
+                            delete node.external;
+                            normalizeFerrytNode(node);
+                        });
+                    } else {
+                        Object.values(flow.nodes || {}).forEach(node => {
+                            delete node.retry;
+                            delete node.external;
+                        });
                     }
                 });
 
                 return true;
             }
         } catch (e) { /* ignore */ }
+        state.exportDate = getTodayIsoDate();
         return false;
     }
 
@@ -1720,6 +1855,7 @@ const App = (() => {
         return function(...args) {
             const result = fn.apply(this, args);
             saveState();
+            scheduleAutoSave();
             return result;
         };
     }
@@ -1806,8 +1942,6 @@ const App = (() => {
                 buildid: lines[i], // original name as buildid
                 enabled: 1,
                 waitfor: '',
-                retry: '1',
-                external: '',
                 x: Math.max(30, (canvasW - nodeW) / 2),
                 y: 30 + (existingCount + i) * 110
             };
@@ -2244,10 +2378,17 @@ const App = (() => {
     async function init() {
         await fetchUsername();
         const loaded = loadState();
+        if (!state.exportDate) {
+            state.exportDate = getTodayIsoDate();
+        }
         if (!loaded) {
             addFlow();
         } else {
             switchServer(state.currentServer);
+        }
+        const exportDateInput = document.getElementById('deployFolderDate');
+        if (exportDateInput) {
+            exportDateInput.value = state.exportDate;
         }
         populateRunatSelect();
         updateServerSpecificUI();
@@ -2257,8 +2398,10 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
+        updateAutoSaveStatus(`Autozapis: ${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
+        scheduleAutoSave(true);
         // Live build count for externa
         const extTextarea = document.getElementById('externaBuildList');
         if (extTextarea) {
@@ -2276,6 +2419,7 @@ const App = (() => {
         switchFlow,
         switchServer,
         updateFlowSetting: withSave(updateFlowSetting),
+        updateExportDate: withSave(updateExportDate),
         addNode: withSave(addNode),
         deleteNode: withSave(deleteNode),
         openNodeModal,
