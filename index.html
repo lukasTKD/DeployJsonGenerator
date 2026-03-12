@@ -69,7 +69,6 @@
                         <div class="form-group">
                             <label>Data instalacji</label>
                             <input type="date" id="deployFolderDate" onchange="App.updateExportDate(this.value)">
-                            <span class="inline-field-status" id="autoSaveStatus">Wybierz folder docelowy</span>
                         </div>
                         <div class="form-group">
                             <label>runat</label>
@@ -84,10 +83,7 @@
                                 <option value="0">0 (Nie)</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label>waitfor (pliki JSON)</label>
-                            <input type="text" id="flowWaitfor" placeholder="Ustawiane w sekcji zależności" readonly>
-                        </div>
+                        <input type="hidden" id="flowWaitfor">
                         <div class="form-group">
                             <label>email</label>
                             <input type="text" id="flowEmail" placeholder="Opcjonalne" onchange="App.updateFlowSetting('email', this.value)">

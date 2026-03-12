@@ -1,26 +1,13 @@
 <%@ Page Language="C#" %>
 <%@ Import Namespace="System" %>
-<%@ Import Namespace="System.Collections.Generic" %>
+<%@ Import Namespace="System.Diagnostics" %>
 <%@ Import Namespace="System.IO" %>
 <%@ Import Namespace="System.Text" %>
 <%@ Import Namespace="System.Text.RegularExpressions" %>
+<%@ Import Namespace="System.Web" %>
 <%@ Import Namespace="System.Web.Script.Serialization" %>
 
 <script runat="server">
-    public class SaveDeploysRequest
-    {
-        public string exportDate { get; set; }
-        public string server { get; set; }
-        public List<DeployFileRequest> files { get; set; }
-    }
-
-    public class DeployFileRequest
-    {
-        public string filename { get; set; }
-        public string content { get; set; }
-    }
-
-    private static readonly string RootDir = @"D:\PROD_REPO_DATA\AutomateDeploy\Deploys";
     private readonly JavaScriptSerializer _serializer = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };
 
     protected void Page_Load(object sender, EventArgs e)
@@ -41,73 +28,74 @@
 
         try
         {
-            var payload = ReadPayload();
-            if (payload == null || payload.files == null || payload.files.Count == 0)
+            var rawBody = ReadRawRequestBody();
+            if (string.IsNullOrWhiteSpace(rawBody))
             {
                 WriteJson(new
                 {
                     ok = false,
-                    error = "Brak plikow do zapisania."
+                    error = "Brak danych do zapisania."
                 }, 400);
                 return;
             }
 
-            var exportDate = (payload.exportDate ?? "").Trim();
-            if (!Regex.IsMatch(exportDate, @"^\d{4}-\d{2}-\d{2}$"))
+            var scriptPath = Server.MapPath("~/save-deploys.ps1");
+            if (!File.Exists(scriptPath))
             {
                 WriteJson(new
                 {
                     ok = false,
-                    error = "Niepoprawny format daty. Oczekiwano yyyy-MM-dd."
-                }, 400);
+                    error = "Nie znaleziono save-deploys.ps1."
+                }, 500);
                 return;
             }
 
-            var targetDir = Path.Combine(RootDir, exportDate);
-            Directory.CreateDirectory(targetDir);
-
-            var savedFiles = new List<string>();
-            foreach (var file in payload.files)
+            var psi = new ProcessStartInfo
             {
-                if (file == null || string.IsNullOrWhiteSpace(file.filename))
+                FileName = "powershell.exe",
+                Arguments = "-NoProfile -NoLogo -NonInteractive -ExecutionPolicy Bypass -File \"" + scriptPath + "\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WorkingDirectory = Path.GetDirectoryName(scriptPath) ?? AppDomain.CurrentDomain.BaseDirectory
+            };
+
+            psi.EnvironmentVariables["REQUEST_METHOD"] = "POST";
+            psi.EnvironmentVariables["CONTENT_TYPE"] = Request.ContentType ?? "application/x-www-form-urlencoded; charset=UTF-8";
+
+            using (var process = Process.Start(psi))
+            {
+                if (process == null)
                 {
-                    continue;
+                    WriteJson(new
+                    {
+                        ok = false,
+                        error = "Nie udalo sie uruchomic powershell.exe."
+                    }, 500);
+                    return;
                 }
 
-                var safeName = SanitizeFileName(file.filename);
-                if (string.IsNullOrWhiteSpace(safeName))
+                process.StandardInput.Write(rawBody);
+                process.StandardInput.Close();
+
+                var stdout = process.StandardOutput.ReadToEnd();
+                var stderr = process.StandardError.ReadToEnd();
+                process.WaitForExit(120000);
+
+                if (process.ExitCode != 0 && !string.IsNullOrWhiteSpace(stderr))
                 {
-                    continue;
+                    WriteJson(new
+                    {
+                        ok = false,
+                        error = stderr.Trim()
+                    }, 500);
+                    return;
                 }
 
-                if (!safeName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-                {
-                    safeName += ".json";
-                }
-
-                var fullPath = Path.Combine(targetDir, safeName);
-                File.WriteAllText(fullPath, file.content ?? "", new UTF8Encoding(false));
-                savedFiles.Add(safeName);
+                RelayPowerShellResponse(stdout, stderr);
             }
-
-            if (savedFiles.Count == 0)
-            {
-                WriteJson(new
-                {
-                    ok = false,
-                    error = "Nie znaleziono poprawnych nazw plikow do zapisania."
-                }, 400);
-                return;
-            }
-
-            WriteJson(new
-            {
-                ok = true,
-                directory = targetDir,
-                saved = savedFiles.Count,
-                files = savedFiles,
-                server = payload.server ?? ""
-            });
         }
         catch (Exception ex)
         {
@@ -119,41 +107,71 @@
         }
     }
 
-    private SaveDeploysRequest ReadPayload()
+    private string ReadRawRequestBody()
     {
-        var formPayload = (Request.Form["payload"] ?? "").Trim();
-        if (!string.IsNullOrWhiteSpace(formPayload))
-        {
-            return _serializer.Deserialize<SaveDeploysRequest>(formPayload);
-        }
-
         Request.InputStream.Position = 0;
         using (var reader = new StreamReader(Request.InputStream, Encoding.UTF8))
         {
             var body = reader.ReadToEnd();
-            return string.IsNullOrWhiteSpace(body) ? null : _serializer.Deserialize<SaveDeploysRequest>(body);
+            if (!string.IsNullOrWhiteSpace(body))
+            {
+                return body;
+            }
         }
-    }
 
-    private string SanitizeFileName(string fileName)
-    {
-        var input = Path.GetFileName((fileName ?? "").Trim());
-        if (string.IsNullOrWhiteSpace(input))
+        var payload = (Request.Form["payload"] ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(payload))
         {
             return "";
         }
 
-        var invalidChars = Path.GetInvalidFileNameChars();
-        var builder = new StringBuilder(input.Length);
-        foreach (var ch in input)
-        {
-            builder.Append(Array.IndexOf(invalidChars, ch) >= 0 ? '_' : ch);
-        }
-
-        return builder.ToString().Trim();
+        return "payload=" + HttpUtility.UrlEncode(payload);
     }
 
-    private void WriteJson(object data, int statusCode = 200)
+    private void RelayPowerShellResponse(string stdout, string stderr)
+    {
+        var output = stdout ?? "";
+        var statusCode = 200;
+        var jsonBody = "";
+
+        var statusMatch = Regex.Match(output, @"^Status:\s*(\d{3})", RegexOptions.Multiline);
+        if (statusMatch.Success)
+        {
+            statusCode = SafeParseStatusCode(statusMatch.Groups[1].Value, 200);
+            var separatorMatch = Regex.Match(output, @"\r?\n\r?\n");
+            jsonBody = separatorMatch.Success
+                ? output.Substring(separatorMatch.Index + separatorMatch.Length).Trim()
+                : "";
+        }
+        else
+        {
+            jsonBody = output.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(jsonBody))
+        {
+            WriteJson(new
+            {
+                ok = false,
+                error = string.IsNullOrWhiteSpace(stderr) ? "Brak odpowiedzi ze skryptu save-deploys.ps1." : stderr.Trim()
+            }, 500);
+            return;
+        }
+
+        Response.Clear();
+        Response.StatusCode = statusCode;
+        Response.ContentType = "application/json";
+        Response.TrySkipIisCustomErrors = true;
+        Response.Write(jsonBody);
+    }
+
+    private int SafeParseStatusCode(string value, int fallback)
+    {
+        int parsed;
+        return int.TryParse(value, out parsed) ? parsed : fallback;
+    }
+
+    private void WriteJson(object data, int statusCode)
     {
         Response.Clear();
         Response.StatusCode = statusCode;
