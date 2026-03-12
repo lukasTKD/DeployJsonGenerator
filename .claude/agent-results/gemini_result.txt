@@ -1,0 +1,3261 @@
+﻿node.exe : Loaded cached credentials.
+At C:\Users\lpery\AppData\Roaming\npm\gemini.ps1:24 char:5
++     & "node$exe" --no-warnings=DEP0040 "$basedir/node_modules/@google ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Loaded cached credentials.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Zanalizuj─Ö struktur─Ö projektu i pobior─Ö pe┼én─à zawarto┼¢─ç wszystkich kluczowych plik├│w zgodnie z Twoimi wytycznymi.
+
+Lista plik├│w w projekcie (rekurencyjnie):
+Error executing tool run_shell_command: Tool "run_shell_command" not found. Did you mean one of: "grep_search", "cli_he
+lp", "read_file"?
+Pobieram pe┼én─à list─Ö plik├│w oraz zawarto┼¢─ç wszystkich plik├│w `.js`, `.html`, `.css`, `.json`, `.ps1` z katalogu `D:\PROD_REPO\IIS\DeployJsonGenerator`.
+
+### Pe┼éna lista plik├│w w projekcie (rekurencyjnie)
+### Zawarto┼¢─ç plik├│w projektu
+
+Przesy┼éam pe┼én─à zawarto┼¢─ç kluczowych plik├│w projektu.
+
+#### [app.js]
+#### [index.html]
+#### [styles.css]
+#### [web.config]
+#### [.claude/settings.local.json]
+#### [DOKUMENTACJA_TECHNICZNA.md]
+#### [DOKUMENTACJA_BUILDID_TC.md]
+#### [INSTRUKCJA_UZYTKOWNIKA.md]
+#### [whoami.aspx]
+#### [.claude/CLAUDE.md]
+Oto pe┼éna lista plik├│w w projekcie oraz zawarto┼¢─ç wszystkich plik├│w ┼║r├│d┼éowych, dokumentacji i konfiguracji.
+
+### 1. Pe┼éna lista plik├│w w projekcie (rekurencyjnie)
+
+```text
+D:\PROD_REPO\IIS\DeployJsonGenerator\app.js
+D:\PROD_REPO\IIS\DeployJsonGenerator\index.html
+D:\PROD_REPO\IIS\DeployJsonGenerator\styles.css
+D:\PROD_REPO\IIS\DeployJsonGenerator\web.config
+D:\PROD_REPO\IIS\DeployJsonGenerator\whoami.aspx
+D:\PROD_REPO\IIS\DeployJsonGenerator\DOKUMENTACJA_BUILDID_TC.md
+D:\PROD_REPO\IIS\DeployJsonGenerator\DOKUMENTACJA_TECHNICZNA.md
+D:\PROD_REPO\IIS\DeployJsonGenerator\INSTRUKCJA_UZYTKOWNIKA.md
+D:\PROD_REPO\IIS\DeployJsonGenerator\images\logo.jpg
+D:\PROD_REPO\IIS\DeployJsonGenerator\.claude\CLAUDE.md
+D:\PROD_REPO\IIS\DeployJsonGenerator\.claude\settings.local.json
+D:\PROD_REPO\IIS\DeployJsonGenerator\.claude\agent-results\gemini_analysis.txt
+D:\PROD_REPO\IIS\DeployJsonGenerator\.claude\agent-results\gemini_css_analysis.txt
+D:\PROD_REPO\IIS\DeployJsonGenerator\.claude\agent-results\gemini_result.txt
+```
+
+---
+
+### 2. Pe┼éna zawarto┼¢─ç plik├│w
+
+#### [app.js]
+```javascript
+/**
+ * Deploy JSON Generator - Visual Flow Editor
+ * Main application logic: nodes, connections, flows, JSON generation
+ */
+
+const App = (() => {
+    // ========== STATE ==========
+    const SERVERS = {
+        haaTeamCity: 'https://haateamcity.mbank.pl',
+        teamcity: 'https://teamcity.mbank.pl'
+    };
+
+    let state = {
+        currentServer: 'haaTeamCity',
+        currentFlowId: null,
+        flows: {},
+        flowOrder: [],
+        nodeCounter: 0,
+        editingNodeId: null,
+        dragging: null,
+        connecting: null
+    };
+
+    let currentUsername = '';
+
+    function getStorageKey() {
+        return currentUsername
+            ? 'deployJsonGenerator_' + currentUsername
+            : 'deployJsonGenerator';
+    }
+
+    // ========== TIME OPTIONS (runat) ==========
+
+    function generateTimeOptions() {
+        const options = [];
+        for (let h = 0; h < 24; h++) {
+            for (let m = 0; m < 60; m += 5) {
+                const hh = String(h).padStart(2, '0');
+                const mm = String(m).padStart(2, '0');
+                options.push(`${hh}:${mm}`);
+            }
+        }
+        return options;
+    }
+
+    function populateRunatSelect() {
+        const select = document.getElementById('flowRunat');
+        if (select.options.length > 1) return; // already populated
+        const times = generateTimeOptions();
+        times.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            select.appendChild(opt);
+        });
+    }
+
+    // ========== FLOW MANAGEMENT ==========
+
+    function addFlow() {
+        const id = 'flow_' + Date.now();
+        state.flows[id] = {
+            id,
+            filename: 'deploy_' + (state.flowOrder.length + 1),
+            server: state.currentServer,
+            enabled: 1,
+            runat: '18:00',
+            email: '',
+            blackout: '',
+            sms: '',
+            change: '',
+            stop: '',
+            nodes: {},
+            connections: []
+        };
+        state.flowOrder.push(id);
+        state.currentFlowId = id;
+        renderFlowTabs();
+        renderCurrentFlow();
+        updateFlowCount();
+        updateJsonPreview();
+
+        renderAllFilesList();
+        return id;
+    }
+
+    function closeAllFlows() {
+        const serverFlows = getServerFlows();
+        if (serverFlows.length === 0) return;
+        if (!confirm('Zamkn─à─ç wszystkie flow dla bie┼╝─àcego serwera? Dane zostan─à usuni─Öte.')) return;
+        const serverFlowIds = new Set(serverFlows.map(f => f.id));
+        // Remove flows belonging to current server
+        serverFlowIds.forEach(id => {
+            delete state.flows[id];
+        });
+        state.flowOrder = state.flowOrder.filter(id => !serverFlowIds.has(id));
+        // Create one fresh flow
+        addFlow();
+        showToast('Zamkni─Öto wszystkie flow', 'success');
+    }
+
+    function removeFlow(flowId) {
+        if (state.flowOrder.length <= 1) {
+            showToast('Nie mo┼╝na usun─à─ç ostatniego flow', 'error');
+            return;
+        }
+        if (!confirm('Usun─à─ç ten flow?')) return;
+        delete state.flows[flowId];
+        state.flowOrder = state.flowOrder.filter(id => id !== flowId);
+        if (state.currentFlowId === flowId) {
+            state.currentFlowId = state.flowOrder[0];
+        }
+        renderFlowTabs();
+        renderCurrentFlow();
+        updateFlowCount();
+        updateJsonPreview();
+
+        renderAllFilesList();
+    }
+
+    function switchFlow(flowId) {
+        state.currentFlowId = flowId;
+        renderFlowTabs();
+        renderCurrentFlow();
+        updateJsonPreview();
+    }
+
+    function switchServer(server) {
+        state.currentServer = server;
+        document.querySelectorAll('.server-tabs-container .tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.server === server);
+        });
+        renderFlowTabs();
+        renderCurrentFlow();
+        updateJsonPreview();
+        renderAllFilesList();
+
+    }
+
+    function getCurrentFlow() {
+        return state.flows[state.currentFlowId] || null;
+    }
+
+    function getServerFlows() {
+        return state.flowOrder
+            .map(id => state.flows[id])
+            .filter(f => f && f.server === state.currentServer);
+    }
+
+    // ========== FLOW SETTINGS ==========
+
+    function updateFlowSetting(key, value) {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        flow[key] = value;
+        if (key === 'filename') {
+            renderFlowTabs();
+    
+        }
+        updateJsonPreview();
+        renderAllFilesList();
+    }
+
+    function loadFlowSettings() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        populateRunatSelect();
+        document.getElementById('flowFilename').value = flow.filename || '';
+        document.getElementById('flowRunat').value = flow.runat || '';
+        document.getElementById('flowStop').value = flow.stop || '';
+        document.getElementById('flowEmail').value = flow.email || '';
+        document.getElementById('flowBlackout').value = flow.blackout || '';
+        document.getElementById('flowSms').value = flow.sms || '';
+        document.getElementById('flowChange').value = flow.change || '';
+        document.getElementById('flowEnabled').value = flow.enabled;
+    }
+
+    // ========== TC BUILD PARAMS ==========
+
+    const TC_BUILD_PARAMS = {
+        'TC_SQL': ['sqlserver', 'database', 'file'],
+        'TC_PowerShell': ['servers', 'file']
+    };
+
+    function isTcSql(buildId) {
+        return buildId && buildId.toLowerCase() === 'tc_sql';
+    }
+
+    function isTcPowerShell(buildId) {
+        return buildId && buildId.toLowerCase() === 'tc_powershell';
+    }
+
+    function updateTcParamsVisibility(buildId) {
+        const sqlSection = document.getElementById('tcSqlParams');
+        const psSection = document.getElementById('tcPowerShellParams');
+        sqlSection.style.display = isTcSql(buildId) ? '' : 'none';
+        psSection.style.display = isTcPowerShell(buildId) ? '' : 'none';
+    }
+
+    function loadTcParams(node) {
+        const params = node.params || {};
+        // TC_SQL fields
+        document.getElementById('nodeEditSqlServer').value = params.sqlserver || '';
+        document.getElementById('nodeEditDatabase').value = params.database || '';
+        document.getElementById('nodeEditSqlFile').value = params.file || '';
+        // TC_PowerShell fields
+        document.getElementById('nodeEditPsServers').value = params.servers || '';
+        document.getElementById('nodeEditPsFile').value = params.file || '';
+    }
+
+    function saveTcParams(node) {
+        const buildId = node.buildid;
+        if (isTcSql(buildId)) {
+            node.params = {
+                sqlserver: document.getElementById('nodeEditSqlServer').value.trim(),
+                database: document.getElementById('nodeEditDatabase').value.trim(),
+                file: document.getElementById('nodeEditSqlFile').value.trim()
+            };
+        } else if (isTcPowerShell(buildId)) {
+            node.params = {
+                servers: document.getElementById('nodeEditPsServers').value.trim(),
+                file: document.getElementById('nodeEditPsFile').value.trim()
+            };
+        } else {
+            delete node.params;
+        }
+    }
+
+    // ========== VALIDATORS ==========
+
+    function validateNodeName(flow, name, excludeNodeId) {
+        const duplicate = Object.values(flow.nodes).find(
+            n => n.name === name && n.id !== excludeNodeId
+        );
+        return duplicate ? `Nazwa "${name}" ju┼╝ istnieje w tym flow` : null;
+    }
+
+    function validateBuildId(flow, buildid, excludeNodeId) {
+        if (!buildid) return null; // empty is allowed (placeholder used)
+        // TC_SQL and TC_PowerShell can be duplicated (same buildid, different name)
+        if (isTcSql(buildid) || isTcPowerShell(buildid)) return null;
+        const duplicate = Object.values(flow.nodes).find(
+            n => n.buildid === buildid && n.id !== excludeNodeId
+        );
+        return duplicate ? `buildid "${buildid}" jest ju┼╝ u┼╝ywane przez "${duplicate.name}"` : null;
+    }
+
+    // ========== NODE MANAGEMENT ==========
+
+    function addNode() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        state.nodeCounter++;
+        const nodeId = 'node_' + state.nodeCounter;
+        // Vertical layout: stack nodes top-to-bottom
+        const existingCount = Object.keys(flow.nodes).length;
+        const canvas = document.getElementById('canvas');
+        const canvasW = canvas.offsetWidth || 600;
+        const nodeW = 180;
+        flow.nodes[nodeId] = {
+            id: nodeId,
+            name: 'Build_' + state.nodeCounter,
+            buildid: '',
+            enabled: 1,
+            waitfor: '',
+            retry: '1',
+            external: '',
+            x: Math.max(30, (canvasW - nodeW) / 2), // centered
+            y: 30 + existingCount * 110
+        };
+        renderCanvas();
+        updateJsonPreview();
+        expandCanvasIfNeeded();
+    }
+
+    function deleteNode() {
+        const flow = getCurrentFlow();
+        if (!flow || !state.editingNodeId) return;
+        const nodeId = state.editingNodeId;
+        const deletedName = flow.nodes[nodeId].name;
+        // Remove connections involving this node
+        flow.connections = flow.connections.filter(
+            c => c.from !== nodeId && c.to !== nodeId
+        );
+        // Update waitfor references
+        Object.values(flow.nodes).forEach(n => {
+            if (n.waitfor === deletedName) n.waitfor = '';
+        });
+        delete flow.nodes[nodeId];
+        closeNodeModal();
+        renderCanvas();
+        updateJsonPreview();
+    }
+
+    // ========== CANVAS RENDERING ==========
+
+    function renderCanvas() {
+        const flow = getCurrentFlow();
+        const canvas = document.getElementById('canvas');
+        if (!flow) {
+            canvas.innerHTML = '<svg class="connections-svg" id="connectionsSvg"></svg>';
+            return;
+        }
+        // Clear nodes (keep SVG)
+        canvas.querySelectorAll('.node').forEach(n => n.remove());
+
+        // Render nodes
+        Object.values(flow.nodes).forEach(node => {
+            canvas.appendChild(createNodeElement(node));
+        });
+
+        // Render connections
+        renderConnections();
+    }
+
+    function createNodeElement(node) {
+        const div = document.createElement('div');
+        div.className = 'node';
+        div.dataset.nodeId = node.id;
+        div.style.left = node.x + 'px';
+        div.style.top = node.y + 'px';
+
+        const statusClass = node.enabled ? 'enabled' : 'disabled';
+        const statusText = node.enabled ? 'enabled: 1' : 'enabled: 0';
+
+        div.innerHTML = `
+            <div class="connector in" title="Wej┼¢cie (drop target)"></div>
+            <div class="node-header">
+                <span class="node-name">${escapeHtml(node.name)}</span>
+                <button class="node-edit-btn" onclick="App.openNodeModal('${node.id}')" title="Edytuj">&#9998;</button>
+            </div>
+            <div class="node-body">
+                <div class="node-buildid">${escapeHtml(node.buildid) || '<em style="color:#999">buildid...</em>'}</div>
+                <div class="node-status">
+                    <span class="${statusClass}">${statusText}</span>
+                    ${node.waitfor ? ' | waitfor: ' + escapeHtml(node.waitfor) : ''}
+                </div>
+            </div>
+            <div class="connector out" title="Przeci─àgnij w d├│┼é aby po┼é─àczy─ç"></div>
+        `;
+
+        // Node dragging from header
+        const header = div.querySelector('.node-header');
+        header.addEventListener('mousedown', (e) => {
+            if (e.target.classList.contains('node-edit-btn')) return;
+            startDrag(e, node, div);
+        });
+
+        // Connector drag (for creating connections) - from bottom connector
+        const connOut = div.querySelector('.connector.out');
+        connOut.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+            startConnection(e, node.id);
+        });
+
+        return div;
+    }
+
+    function renderConnections() {
+        const flow = getCurrentFlow();
+        const svg = document.getElementById('connectionsSvg');
+        if (!svg || !flow) return;
+
+        svg.innerHTML = '';
+        // Defs for arrowhead
+        const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+        defs.innerHTML = `
+            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" class="connection-arrowhead"/>
+            </marker>
+        `;
+        svg.appendChild(defs);
+
+        flow.connections.forEach((conn, idx) => {
+            const fromNode = flow.nodes[conn.from];
+            const toNode = flow.nodes[conn.to];
+            if (!fromNode || !toNode) return;
+
+            const fromEl = document.querySelector(`[data-node-id="${conn.from}"]`);
+            const toEl = document.querySelector(`[data-node-id="${conn.to}"]`);
+            if (!fromEl || !toEl) return;
+
+            const fromW = fromEl.offsetWidth;
+            const fromH = fromEl.offsetHeight;
+            const toW = toEl.offsetWidth;
+
+            // Vertical: from bottom-center of source to top-center of target
+            const x1 = fromNode.x + fromW / 2;
+            const y1 = fromNode.y + fromH;
+            const x2 = toNode.x + toW / 2;
+            const y2 = toNode.y;
+
+            // Curved path (vertical)
+            const midY = (y1 + y2) / 2;
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', `M ${x1} ${y1} C ${x1} ${midY}, ${x2} ${midY}, ${x2} ${y2}`);
+            path.setAttribute('class', 'connection-line');
+            path.setAttribute('marker-end', 'url(#arrowhead)');
+            path.addEventListener('dblclick', () => removeConnection(idx));
+            path.addEventListener('mouseenter', function() { this.style.strokeWidth = '4'; });
+            path.addEventListener('mouseleave', function() { this.style.strokeWidth = '2'; });
+            svg.appendChild(path);
+
+            // Delete button at midpoint
+            const mx = (x1 + x2) / 2;
+            const my = (y1 + y2) / 2;
+            const delGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            delGroup.setAttribute('class', 'connection-delete');
+            delGroup.setAttribute('transform', `translate(${mx - 8}, ${my - 8})`);
+            delGroup.innerHTML = `
+                <circle cx="8" cy="8" r="8" fill="#c62828" />
+                <text x="8" y="12" text-anchor="middle" fill="#fff" font-size="12" font-weight="bold">&times;</text>
+            `;
+            delGroup.style.pointerEvents = 'all';
+            delGroup.addEventListener('click', () => removeConnection(idx));
+            path.addEventListener('mouseenter', () => { delGroup.style.opacity = '1'; });
+            path.addEventListener('mouseleave', () => { delGroup.style.opacity = '0'; });
+            delGroup.addEventListener('mouseenter', () => { delGroup.style.opacity = '1'; });
+            delGroup.addEventListener('mouseleave', () => { delGroup.style.opacity = '0'; });
+            svg.appendChild(delGroup);
+        });
+    }
+
+    function removeConnection(index) {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        const conn = flow.connections[index];
+        if (conn) {
+            const toNode = flow.nodes[conn.to];
+            const fromNode = flow.nodes[conn.from];
+            if (toNode && fromNode && toNode.waitfor === fromNode.name) {
+                toNode.waitfor = '';
+            }
+        }
+        flow.connections.splice(index, 1);
+        renderConnections();
+        updateJsonPreview();
+    }
+
+    // ========== DRAG & DROP ==========
+
+    function startDrag(e, node, el) {
+        e.preventDefault();
+        const canvas = document.getElementById('canvas');
+        const canvasRect = canvas.getBoundingClientRect();
+        const offsetX = e.clientX - canvasRect.left - node.x;
+        const offsetY = e.clientY - canvasRect.top - node.y;
+        el.classList.add('dragging');
+
+        const onMove = (ev) => {
+            node.x = Math.max(0, ev.clientX - canvasRect.left - offsetX);
+            node.y = Math.max(0, ev.clientY - canvasRect.top - offsetY);
+            el.style.left = node.x + 'px';
+            el.style.top = node.y + 'px';
+            renderConnections();
+        };
+
+        const onUp = () => {
+            el.classList.remove('dragging');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            expandCanvasIfNeeded();
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    }
+
+    function startConnection(e, fromNodeId) {
+        e.preventDefault();
+        const canvas = document.getElementById('canvas');
+        const canvasRect = canvas.getBoundingClientRect();
+        const svg = document.getElementById('connectionsSvg');
+
+        const flow = getCurrentFlow();
+        const fromNode = flow.nodes[fromNodeId];
+        const fromEl = document.querySelector(`[data-node-id="${fromNodeId}"]`);
+        // Start from bottom-center
+        const x1 = fromNode.x + fromEl.offsetWidth / 2;
+        const y1 = fromNode.y + fromEl.offsetHeight;
+
+        const tempLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        tempLine.setAttribute('x1', x1);
+        tempLine.setAttribute('y1', y1);
+        tempLine.setAttribute('x2', x1);
+        tempLine.setAttribute('y2', y1);
+        tempLine.setAttribute('class', 'connection-temp');
+        svg.appendChild(tempLine);
+
+        const onMove = (ev) => {
+            tempLine.setAttribute('x2', ev.clientX - canvasRect.left);
+            tempLine.setAttribute('y2', ev.clientY - canvasRect.top);
+        };
+
+        const onUp = (ev) => {
+            tempLine.remove();
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            const target = ev.target.closest('.node');
+            if (target && target.dataset.nodeId !== fromNodeId) {
+                createConnection(fromNodeId, target.dataset.nodeId);
+            }
+        };
+
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    }
+
+    function createConnection(fromId, toId) {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        if (fromId === toId) return;
+
+        // Prevent duplicates
+        if (flow.connections.some(c => c.from === fromId && c.to === toId)) return;
+
+        // Prevent reverse (cycle)
+        if (flow.connections.some(c => c.from === toId && c.to === fromId)) {
+            showToast('Cykliczna zale┼╝no┼¢─ç niedozwolona', 'error');
+            return;
+        }
+
+        flow.connections.push({ from: fromId, to: toId });
+
+        // Set waitfor on target node
+        const fromNode = flow.nodes[fromId];
+        const toNode = flow.nodes[toId];
+        if (fromNode && toNode) {
+            toNode.waitfor = fromNode.name;
+        }
+
+        renderConnections();
+        updateJsonPreview();
+    }
+
+    function expandCanvasIfNeeded() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        const canvas = document.getElementById('canvas');
+        let maxY = 450;
+        Object.values(flow.nodes).forEach(n => {
+            if (n.y + 120 > maxY) maxY = n.y + 120;
+        });
+        canvas.style.minHeight = maxY + 'px';
+    }
+
+    // ========== NODE MODAL ==========
+
+    function openNodeModal(nodeId) {
+        const flow = getCurrentFlow();
+        if (!flow || !flow.nodes[nodeId]) return;
+        state.editingNodeId = nodeId;
+        const node = flow.nodes[nodeId];
+
+        document.getElementById('nodeEditName').value = node.name || '';
+        document.getElementById('nodeEditBuildId').value = node.buildid || '';
+        document.getElementById('nodeEditEnabled').value = node.enabled;
+        document.getElementById('nodeEditWaitfor').value = node.waitfor || '';
+        document.getElementById('nodeEditRetry').value = node.retry || '';
+        document.getElementById('nodeEditExternal').value = node.external || '';
+        document.getElementById('nodeEditStop').value = node.stop || '';
+
+        // Show/hide TC params and load values
+        updateTcParamsVisibility(node.buildid || '');
+        loadTcParams(node);
+
+        // Listen for buildid changes to toggle TC params
+        const buildIdInput = document.getElementById('nodeEditBuildId');
+        buildIdInput.oninput = function() {
+            updateTcParamsVisibility(this.value.trim());
+        };
+
+        // Clear previous validation messages
+        clearValidation();
+
+        document.getElementById('nodeEditModal').style.display = 'flex';
+    }
+
+    function closeNodeModal() {
+        document.getElementById('nodeEditModal').style.display = 'none';
+        state.editingNodeId = null;
+    }
+
+    function saveNodeEdit() {
+        const flow = getCurrentFlow();
+        if (!flow || !state.editingNodeId) return;
+        const node = flow.nodes[state.editingNodeId];
+        const oldName = node.name;
+        const newName = document.getElementById('nodeEditName').value.trim() || node.name;
+        const newBuildId = document.getElementById('nodeEditBuildId').value.trim();
+
+        // Validate name uniqueness
+        const nameError = validateNodeName(flow, newName, state.editingNodeId);
+        if (nameError) {
+            showValidationError('nodeEditName', nameError);
+            return;
+        }
+
+        // Validate buildid uniqueness
+        const buildIdError = validateBuildId(flow, newBuildId, state.editingNodeId);
+        if (buildIdError) {
+            showValidationError('nodeEditBuildId', buildIdError);
+            return;
+        }
+
+        node.name = newName;
+        node.buildid = newBuildId;
+        node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
+        node.retry = document.getElementById('nodeEditRetry').value.trim();
+        node.external = document.getElementById('nodeEditExternal').value.trim();
+        node.stop = document.getElementById('nodeEditStop').value.trim();
+
+        // Save TC params
+        saveTcParams(node);
+
+        // Update waitfor references if name changed
+        if (oldName !== newName) {
+            Object.values(flow.nodes).forEach(n => {
+                if (n.waitfor === oldName) n.waitfor = newName;
+            });
+        }
+
+        closeNodeModal();
+        renderCanvas();
+        updateJsonPreview();
+    }
+
+    function showValidationError(inputId, message) {
+        clearValidation();
+        const input = document.getElementById(inputId);
+        input.classList.add('validation-error');
+        const msg = document.createElement('div');
+        msg.className = 'validation-msg';
+        msg.textContent = message;
+        input.parentElement.appendChild(msg);
+        showToast(message, 'error');
+    }
+
+    function clearValidation() {
+        document.querySelectorAll('.validation-error').forEach(el => el.classList.remove('validation-error'));
+        document.querySelectorAll('.validation-msg').forEach(el => el.remove());
+    }
+
+    // ========== AUTO LAYOUT (TOP-TO-BOTTOM) ==========
+
+    function autoLayout() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+
+        const nodes = Object.values(flow.nodes);
+        if (nodes.length === 0) return;
+
+        // Topological sort - level assignment
+        const inDegree = {};
+        nodes.forEach(n => { inDegree[n.id] = 0; });
+        flow.connections.forEach(c => { inDegree[c.to] = (inDegree[c.to] || 0) + 1; });
+
+        const queue = nodes.filter(n => inDegree[n.id] === 0).map(n => n.id);
+        const nodeLevel = {};
+        queue.forEach(id => { nodeLevel[id] = 0; });
+
+        let head = 0;
+        while (head < queue.length) {
+            const currentId = queue[head++];
+            flow.connections.filter(c => c.from === currentId).forEach(c => {
+                const nextLevel = (nodeLevel[currentId] || 0) + 1;
+                nodeLevel[c.to] = Math.max(nodeLevel[c.to] || 0, nextLevel);
+                inDegree[c.to]--;
+                if (inDegree[c.to] === 0) queue.push(c.to);
+            });
+        }
+
+        nodes.forEach(n => {
+            if (!(n.id in nodeLevel)) nodeLevel[n.id] = 0;
+        });
+
+        // Group by level
+        const levelGroups = {};
+        nodes.forEach(n => {
+            const lvl = nodeLevel[n.id];
+            if (!levelGroups[lvl]) levelGroups[lvl] = [];
+            levelGroups[lvl].push(n);
+        });
+
+        // Position: VERTICAL layout (one node per row, top-to-bottom)
+        const canvas = document.getElementById('canvas');
+        const canvasW = canvas.offsetWidth || 700;
+        const nodeW = 180;
+        const gapY = 120; // vertical gap between rows
+        const startY = 30;
+        const centerX = Math.max(30, (canvasW - nodeW) / 2);
+
+        // Flatten levels into a single vertical list
+        let row = 0;
+        const sortedLevels = Object.keys(levelGroups).map(Number).sort((a, b) => a - b);
+        sortedLevels.forEach(level => {
+            const group = levelGroups[level];
+            group.forEach(node => {
+                node.x = centerX;
+                node.y = startY + row * gapY;
+                row++;
+            });
+        });
+
+        renderCanvas();
+        expandCanvasIfNeeded();
+    }
+
+    function clearCanvas() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        if (!confirm('Wyczy┼¢ci─ç wszystkie buildy z tego flow?')) return;
+        flow.nodes = {};
+        flow.connections = [];
+        renderCanvas();
+        updateJsonPreview();
+    }
+
+    // ========== JSON GENERATION ==========
+
+    function generateJson(flow) {
+        if (!flow) return null;
+        const json = {
+            tcserver: SERVERS[flow.server],
+            enabled: flow.enabled
+        };
+
+        // runat always present
+        json.runat = flow.runat || '';
+
+        // Optional root-level fields
+        if (flow.stop) json.stop = flow.stop;
+        if (flow.email) json.email = flow.email;
+        if (flow.blackout) json.blackout = flow.blackout;
+        if (flow.sms) json.sms = flow.sms;
+        if (flow.change) json.change = flow.change;
+
+        // Builds (fixed: "builds" not "bilds")
+        json.builds = {};
+        const orderedNodes = getOrderedNodes(flow);
+        orderedNodes.forEach(node => {
+            const build = {};
+            if (node.waitfor) build.waitfor = node.waitfor;
+            build.enabled = node.enabled;
+            build.buildid = node.buildid || 'NAZWA_BUILDA';
+            if (node.retry) build.retry = node.retry;
+            if (node.external) build.external = node.external;
+            if (node.stop) build.stop = node.stop;
+            // TC params
+            if (node.params && Object.keys(node.params).length > 0) {
+                build.params = { ...node.params };
+            }
+            json.builds[node.name] = build;
+        });
+
+        return json;
+    }
+
+    function getOrderedNodes(flow) {
+        const nodes = Object.values(flow.nodes);
+        if (nodes.length === 0) return [];
+
+        const inDegree = {};
+        nodes.forEach(n => { inDegree[n.id] = 0; });
+        flow.connections.forEach(c => {
+            inDegree[c.to] = (inDegree[c.to] || 0) + 1;
+        });
+
+        const queue = nodes.filter(n => inDegree[n.id] === 0);
+        const result = [];
+        const visited = new Set();
+
+        while (queue.length > 0) {
+            const node = queue.shift();
+            if (visited.has(node.id)) continue;
+            visited.add(node.id);
+            result.push(node);
+            flow.connections.filter(c => c.from === node.id).forEach(c => {
+                inDegree[c.to]--;
+                if (inDegree[c.to] === 0) {
+                    const toNode = flow.nodes[c.to];
+                    if (toNode) queue.push(toNode);
+                }
+            });
+        }
+
+        // Add disconnected nodes
+        nodes.forEach(n => {
+            if (!visited.has(n.id)) result.push(n);
+        });
+
+        return result;
+    }
+
+    function formatJson(obj) {
+        return JSON.stringify(obj, null, 4);
+    }
+
+    function updateJsonPreview() {
+        const flow = getCurrentFlow();
+        const preview = document.getElementById('jsonPreview');
+        if (!flow) {
+            preview.textContent = '{ }';
+            return;
+        }
+        const json = generateJson(flow);
+        preview.innerHTML = syntaxHighlight(formatJson(json));
+        renderAllFilesList();
+    }
+
+    function syntaxHighlight(json) {
+        return json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+            .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+            .replace(/: (\d+)/g, ': <span class="json-number">$1</span>');
+    }
+
+    // ========== RENDER FUNCTIONS ==========
+
+    function renderFlowTabs() {
+        const wrapper = document.getElementById('flowTabs');
+        const serverFlows = getServerFlows();
+        wrapper.innerHTML = serverFlows.map(flow => {
+            const isActive = flow.id === state.currentFlowId ? 'active' : '';
+            return `
+                <button class="flow-tab ${isActive}" onclick="App.switchFlow('${flow.id}')">
+                    ${escapeHtml(flow.filename || 'untitled')}.json
+                    <span class="flow-tab-close" onclick="event.stopPropagation(); App.removeFlow('${flow.id}')">&times;</span>
+                </button>
+            `;
+        }).join('');
+
+        if (!serverFlows.find(f => f.id === state.currentFlowId)) {
+            if (serverFlows.length > 0) {
+                state.currentFlowId = serverFlows[0].id;
+            }
+        }
+    }
+
+    function renderCurrentFlow() {
+        loadFlowSettings();
+        renderCanvas();
+    }
+
+    function renderAllFilesList() {
+        const list = document.getElementById('allFilesList');
+        const serverFlows = getServerFlows();
+
+        if (serverFlows.length === 0) {
+            list.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">Brak flows dla tego serwera.</div>';
+            return;
+        }
+
+        list.innerHTML = serverFlows.map(flow => {
+            const buildCount = Object.keys(flow.nodes).length;
+            return `
+                <div class="file-item">
+                    <span class="file-name">${escapeHtml(flow.filename)}.json</span>
+                    <span class="file-builds">${buildCount} build${buildCount !== 1 ? '├│w' : ''}</span>
+                    <button class="btn btn-secondary btn-sm" onclick="App.downloadFlowJson('${flow.id}')">Pobierz</button>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function updateFlowCount() {
+        document.getElementById('flowCount').textContent = `Flows: ${getServerFlows().length}`;
+    }
+
+    // ========== DOWNLOAD ==========
+
+    function downloadCurrentJson() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        downloadJsonFile(flow.filename + '.json', generateJson(flow));
+    }
+
+    function downloadFlowJson(flowId) {
+        const flow = state.flows[flowId];
+        if (!flow) return;
+        downloadJsonFile(flow.filename + '.json', generateJson(flow));
+    }
+
+    function downloadAllJson() {
+        const serverFlows = getServerFlows();
+        if (serverFlows.length === 0) {
+            showToast('Brak flows do pobrania', 'error');
+            return;
+        }
+        serverFlows.forEach(flow => {
+            downloadJsonFile(flow.filename + '.json', generateJson(flow));
+        });
+        showToast(`Pobrano ${serverFlows.length} plik(├│w) JSON`, 'success');
+    }
+
+    function downloadJsonFile(filename, jsonObj) {
+        const blob = new Blob([formatJson(jsonObj)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function copyJson() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        navigator.clipboard.writeText(formatJson(generateJson(flow))).then(() => {
+            showToast('JSON skopiowany do schowka', 'success');
+        }).catch(() => {
+            showToast('Nie uda┼éo si─Ö skopiowa─ç', 'error');
+        });
+    }
+
+    // ========== UTILITIES ==========
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function showToast(message, type) {
+        const toast = document.createElement('div');
+        toast.className = `toast ${type || 'info'}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // ========== SAVE/LOAD STATE (localStorage) ==========
+
+    function saveState() {
+        try {
+            localStorage.setItem(getStorageKey(), JSON.stringify({
+                currentServer: state.currentServer,
+                currentFlowId: state.currentFlowId,
+                flows: state.flows,
+                flowOrder: state.flowOrder,
+                nodeCounter: state.nodeCounter
+            }));
+        } catch (e) { /* ignore */ }
+    }
+
+    function loadState() {
+        try {
+            const data = JSON.parse(localStorage.getItem(getStorageKey()));
+            if (data && data.flows && Object.keys(data.flows).length > 0) {
+                state.currentServer = data.currentServer || 'haaTeamCity';
+                state.currentFlowId = data.currentFlowId;
+                state.flows = data.flows;
+                state.flowOrder = data.flowOrder || [];
+                state.nodeCounter = data.nodeCounter || 0;
+                return true;
+            }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
+
+    function withSave(fn) {
+        return function(...args) {
+            const result = fn.apply(this, args);
+            saveState();
+            return result;
+        };
+    }
+
+    function setBulkDrawerOpen(isOpen) {
+        const drawer = document.getElementById('bulkDrawer');
+        const overlay = document.getElementById('bulkDrawerOverlay');
+        if (!drawer || !overlay) return;
+        drawer.classList.toggle('open', isOpen);
+        overlay.classList.toggle('open', isOpen);
+        drawer.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+    }
+
+    function toggleBulkDrawer() {
+        const drawer = document.getElementById('bulkDrawer');
+        if (!drawer) return;
+        setBulkDrawerOpen(!drawer.classList.contains('open'));
+    }
+
+    function closeBulkDrawer() {
+        setBulkDrawerOpen(false);
+    }
+
+    // ========== BULK PASTE BUILDS ==========
+
+    function bulkAddBuilds() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        const textarea = document.getElementById('bulkBuildList');
+        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+        if (lines.length === 0) {
+            showToast('Wklej przynajmniej jedn─à nazw─Ö builda', 'error');
+            return;
+        }
+
+        // Check for duplicates in input
+        const seen = new Set();
+        const duplicates = [];
+        lines.forEach(name => {
+            if (seen.has(name)) duplicates.push(name);
+            seen.add(name);
+        });
+        if (duplicates.length > 0) {
+            showToast(`Duplikaty na li┼¢cie: ${duplicates.join(', ')}`, 'error');
+            return;
+        }
+
+        // Check name conflicts with existing nodes
+        const existingNames = new Set(Object.values(flow.nodes).map(n => n.name));
+        const conflicts = lines.filter(name => existingNames.has(name));
+
+        let addedNames = lines;
+        if (conflicts.length > 0) {
+            // Auto-rename conflicting by appending suffix
+            addedNames = lines.map(name => {
+                let finalName = name;
+                let counter = 2;
+                while (existingNames.has(finalName)) {
+                    finalName = name + '_' + counter;
+                    counter++;
+                }
+                existingNames.add(finalName);
+                return finalName;
+            });
+            showToast(`Zmieniono nazwy ${conflicts.length} konfliktuj─àcych build├│w`, 'info');
+        }
+
+        const canvas = document.getElementById('canvas');
+        const canvasW = canvas.offsetWidth || 600;
+        const nodeW = 180;
+        const existingCount = Object.keys(flow.nodes).length;
+
+        addedNames.forEach((name, i) => {
+            state.nodeCounter++;
+            const nodeId = 'node_' + state.nodeCounter;
+            flow.nodes[nodeId] = {
+                id: nodeId,
+                name: name,
+                buildid: lines[i], // original name as buildid
+                enabled: 1,
+                waitfor: '',
+                retry: '1',
+                external: '',
+                x: Math.max(30, (canvasW - nodeW) / 2),
+                y: 30 + (existingCount + i) * 110
+            };
+        });
+
+        textarea.value = '';
+        renderCanvas();
+        updateJsonPreview();
+        expandCanvasIfNeeded();
+        closeBulkDrawer();
+        showToast(`Dodano ${addedNames.length} build├│w do flow`, 'success');
+    }
+
+    // ========== EXTERNA MODE ==========
+
+    let externaJson = null;
+
+    function switchMode(mode) {
+        document.querySelectorAll('.mode-tab').forEach(t => {
+            t.classList.toggle('active', t.dataset.mode === mode);
+        });
+        document.getElementById('editorMode').style.display = mode === 'editor' ? '' : 'none';
+        document.getElementById('externaMode').style.display = mode === 'externa' ? 'flex' : 'none';
+
+        if (mode === 'externa') {
+            populateExternaRunat();
+            updateExternaBuildCount();
+        }
+    }
+
+    function populateExternaRunat() {
+        const select = document.getElementById('externaRunat');
+        if (select.options.length > 1) return;
+        generateTimeOptions().forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            select.appendChild(opt);
+        });
+        select.value = '18:00';
+    }
+
+    function updateExternaBuildCount() {
+        const textarea = document.getElementById('externaBuildList');
+        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        document.getElementById('externaBuildCount').textContent = `${lines.length} build├│w`;
+    }
+
+    function generateExterna() {
+        const textarea = document.getElementById('externaBuildList');
+        const lines = textarea.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+        if (lines.length === 0) {
+            showToast('Wklej przynajmniej jedn─à nazw─Ö builda', 'error');
+            return;
+        }
+
+        // Check for duplicates
+        const seen = new Set();
+        const duplicates = [];
+        lines.forEach(name => {
+            if (seen.has(name)) duplicates.push(name);
+            seen.add(name);
+        });
+        if (duplicates.length > 0) {
+            showToast(`Duplikaty: ${duplicates.join(', ')}`, 'error');
+            return;
+        }
+
+        const serverKey = document.getElementById('externaServer').value;
+        const runat = document.getElementById('externaRunat').value;
+        const waitfor = document.getElementById('externaWaitfor').value.trim();
+        const json = {
+            tcserver: SERVERS[serverKey],
+            enabled: 1,
+            runat: runat || '',
+            waitfor: waitfor || ''
+        };
+
+        json.builds = {};
+        lines.forEach(name => {
+            json.builds[name] = {
+                enabled: 1,
+                buildid: name,
+                externa: 1
+            };
+        });
+
+        externaJson = json;
+
+        const preview = document.getElementById('externaJsonPreview');
+        preview.innerHTML = syntaxHighlight(formatJson(json));
+        showToast(`Wygenerowano JSON z ${lines.length} buildami`, 'success');
+    }
+
+    function copyExternaJson() {
+        if (!externaJson) {
+            showToast('Najpierw wygeneruj JSON', 'error');
+            return;
+        }
+        navigator.clipboard.writeText(formatJson(externaJson)).then(() => {
+            showToast('JSON skopiowany do schowka', 'success');
+        }).catch(() => {
+            showToast('Nie uda┼éo si─Ö skopiowa─ç', 'error');
+        });
+    }
+
+    function downloadExternaJson() {
+        if (!externaJson) {
+            showToast('Najpierw wygeneruj JSON', 'error');
+            return;
+        }
+        const filename = (document.getElementById('externaFilename').value.trim() || 'externa_deploy') + '.json';
+        downloadJsonFile(filename, externaJson);
+    }
+
+    // ========== KEYBOARD SHORTCUTS ==========
+
+    function initKeyboard() {
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeNodeModal();
+            if (e.key === 'Escape') closeBulkDrawer();
+            if (e.key === 'Delete' && state.editingNodeId) deleteNode();
+        });
+    }
+
+    // ========== INIT ==========
+
+    async function fetchUsername() {
+        try {
+            const resp = await fetch('whoami.aspx');
+            if (resp.ok) {
+                const data = await resp.json();
+                currentUsername = data.username || '';
+            }
+        } catch (e) {
+            // Fallback: no per-user isolation
+            currentUsername = '';
+        }
+    }
+
+    async function init() {
+        await fetchUsername();
+        const loaded = loadState();
+        if (!loaded) {
+            addFlow();
+        } else {
+            switchServer(state.currentServer);
+        }
+        populateRunatSelect();
+        renderFlowTabs();
+        renderCurrentFlow();
+        updateFlowCount();
+        updateJsonPreview();
+
+        renderAllFilesList();
+        initKeyboard();
+        setInterval(saveState, 5000);
+        // Live build count for externa
+        const extTextarea = document.getElementById('externaBuildList');
+        if (extTextarea) {
+            extTextarea.addEventListener('input', updateExternaBuildCount);
+        }
+    }
+
+    // ========== PUBLIC API ==========
+    return {
+        init,
+        addFlow: withSave(addFlow),
+        removeFlow: withSave(removeFlow),
+        closeAllFlows: withSave(closeAllFlows),
+        switchFlow,
+        switchServer,
+        updateFlowSetting: withSave(updateFlowSetting),
+        addNode: withSave(addNode),
+        deleteNode: withSave(deleteNode),
+        openNodeModal,
+        closeNodeModal,
+        saveNodeEdit: withSave(saveNodeEdit),
+        autoLayout: withSave(autoLayout),
+        clearCanvas: withSave(clearCanvas),
+        copyJson,
+        downloadCurrentJson,
+        downloadFlowJson,
+        downloadAllJson,
+        switchMode,
+        generateExterna,
+        copyExternaJson,
+        downloadExternaJson,
+        bulkAddBuilds: withSave(bulkAddBuilds),
+        toggleBulkDrawer,
+        closeBulkDrawer
+    };
+})();
+
+document.addEventListener('DOMContentLoaded', App.init);
+```
+
+#### [index.html]
+```html
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deploy JSON Generator</title>
+    <link rel="icon" type="image/png" href="images/favicon.png">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="header-left">
+                <img src="images/logo.jpg" alt="Logo" class="logo">
+                <h1 class="header-title">
+                    <svg class="json-icon" viewBox="0 0 40 44" width="24" height="30" aria-hidden="true">
+                        <path class="json-file" d="M6 2h18l8 8v32H6z" fill="none" stroke="#E60000" stroke-width="2"/>
+                        <path class="json-fold" d="M24 2v8h8" fill="none" stroke="#E60000" stroke-width="2"/>
+                        <text class="json-braces" x="11" y="24">{ }</text>
+                        <text class="json-label" x="10" y="33">JSON</text>
+                    </svg>
+                    Deploy JSON Generator
+                </h1>
+            </div>
+            <div class="header-center">
+                <div class="mode-tabs">
+                    <button class="mode-tab active" data-mode="editor" onclick="App.switchMode('editor')">Flow Editor</button>
+                    <button class="mode-tab" data-mode="externa" onclick="App.switchMode('externa')">External</button>
+                </div>
+            </div>
+            <div class="header-right">
+                <span class="header-info" id="flowCount">Flows: 0</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- ===== EDITOR MODE ===== -->
+        <div id="editorMode">
+        <!-- Server Tabs -->
+        <div class="server-tabs-container">
+            <div class="tabs-wrapper">
+                <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity.mbank.pl</button>
+                <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
+            </div>
+        </div>
+
+        <!-- Flow Tabs -->
+        <div class="flow-tabs-container">
+            <div class="flow-tabs-wrapper" id="flowTabs">
+                <!-- Flow tabs will be generated dynamically -->
+            </div>
+            <button class="btn-add-flow" id="btnAddFlow" onclick="App.addFlow()" title="Dodaj nowy flow">+</button>
+            <button class="btn-close-all-flows" id="btnCloseAll" onclick="App.closeAllFlows()" title="Zamknij wszystkie flow">Zamknij wszystkie</button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Left Panel - Flow Settings + Canvas -->
+            <div class="left-panel">
+                <!-- Flow Settings -->
+                <div class="flow-settings card" id="flowSettings">
+                    <h3 class="section-title">Ustawienia Flow</h3>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>Nazwa pliku JSON</label>
+                            <input type="text" id="flowFilename" placeholder="deploy_config" onchange="App.updateFlowSetting('filename', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>runat</label>
+                            <select id="flowRunat" onchange="App.updateFlowSetting('runat', this.value)">
+                                <option value="">-- brak --</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>stop (opcjonalne)</label>
+                            <input type="text" id="flowStop" placeholder="Opcjonalne" onchange="App.updateFlowSetting('stop', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>email</label>
+                            <input type="text" id="flowEmail" placeholder="Opcjonalne" onchange="App.updateFlowSetting('email', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>blackout</label>
+                            <input type="text" id="flowBlackout" placeholder="Opcjonalne" onchange="App.updateFlowSetting('blackout', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>sms</label>
+                            <input type="text" id="flowSms" placeholder="Opcjonalne" onchange="App.updateFlowSetting('sms', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>change</label>
+                            <input type="text" id="flowChange" placeholder="Opcjonalne" onchange="App.updateFlowSetting('change', this.value)">
+                        </div>
+                        <div class="form-group">
+                            <label>enabled</label>
+                            <select id="flowEnabled" onchange="App.updateFlowSetting('enabled', parseInt(this.value))">
+                                <option value="1">1 (Tak)</option>
+                                <option value="0">0 (Nie)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Diagram Canvas -->
+                <div class="canvas-container card">
+                    <div class="canvas-toolbar">
+                        <h3 class="section-title">Diagram Flow</h3>
+                        <div class="toolbar-actions">
+                            <button class="btn btn-primary" onclick="App.addNode()">+ Dodaj Build</button>
+                            <button class="btn btn-secondary" onclick="App.autoLayout()">Auto Layout</button>
+                            <button class="btn btn-danger" onclick="App.clearCanvas()">Wyczy┼¢─ç</button>
+                        </div>
+                    </div>
+                    <div class="canvas-info">
+                        <span>Przeci─àgnij z <span class="connector-hint">ΓùÅ</span> na inny node aby utworzy─ç zale┼╝no┼¢─ç (waitfor)</span>
+                    </div>
+                    <div class="canvas" id="canvas">
+                        <svg class="connections-svg" id="connectionsSvg"></svg>
+                        <!-- Nodes will be placed here dynamically -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Panel - JSON Preview -->
+            <div class="right-panel">
+                <div class="json-preview card">
+                    <div class="preview-header">
+                        <h3 class="section-title">Podgl─àd JSON</h3>
+                        <div class="preview-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="App.copyJson()">Kopiuj</button>
+                            <button class="btn btn-primary btn-sm" onclick="App.downloadCurrentJson()">Pobierz</button>
+                        </div>
+                    </div>
+                    <pre class="json-output" id="jsonPreview">{ }</pre>
+                </div>
+
+                <div class="json-all-preview card">
+                    <div class="preview-header">
+                        <h3 class="section-title">Wszystkie pliki JSON</h3>
+                        <div class="preview-actions">
+                            <button class="btn btn-primary" onclick="App.downloadAllJson()">Pobierz wszystkie</button>
+                        </div>
+                    </div>
+                    <div class="all-files-list" id="allFilesList">
+                        <!-- Generated dynamically -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+            <button class="bulk-drawer-tab" onclick="App.toggleBulkDrawer()" title="Szybkie dodawanie build├│w" aria-label="Otw├│rz panel szybkiego dodawania build├│w">
+                <span class="bulk-tab-arrow">Γû╢</span>
+                <span class="bulk-tab-text">Szybkie buildy</span>
+            </button>
+
+            <div class="bulk-drawer-overlay" id="bulkDrawerOverlay" onclick="App.closeBulkDrawer()"></div>
+            <aside class="bulk-drawer" id="bulkDrawer" aria-hidden="true">
+                <div class="bulk-drawer-header">
+                    <h3 class="section-title">Szybkie dodawanie build├│w</h3>
+                    <button class="bulk-drawer-close" onclick="App.closeBulkDrawer()" title="Zamknij">&times;</button>
+                </div>
+                <p class="bulk-drawer-desc">Wklej list─Ö nazw build├│w (jeden na lini─Ö). Buildy zostan─à dodane do bie┼╝─àcego flow.</p>
+                <textarea id="bulkBuildList" class="externa-textarea" rows="14" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3"></textarea>
+                <div class="bulk-drawer-actions">
+                    <button class="btn btn-primary" onclick="App.bulkAddBuilds()">Dodaj buildy</button>
+                    <button class="btn btn-secondary" onclick="App.closeBulkDrawer()">Zamknij</button>
+                </div>
+            </aside>
+        </div><!-- /editorMode -->
+
+        <!-- ===== EXTERNA MODE ===== -->
+        <div id="externaMode" style="display:none;">
+            <div class="externa-layout">
+                <div class="externa-panel card">
+                    <h3 class="section-title">Generator Externa</h3>
+                    <p class="externa-desc">Wklej list─Ö nazw build├│w (ka┼╝dy w nowej linii) i wygeneruj plik JSON z externa: 1</p>
+
+                    <div class="externa-settings">
+                        <div class="form-group">
+                            <label>Serwer TeamCity</label>
+                            <select id="externaServer">
+                                <option value="haaTeamCity">haaTeamCity.mbank.pl (https://haateamcity.mbank.pl)</option>
+                                <option value="teamcity">TeamCity.mbank.pl (https://teamcity.mbank.pl)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Nazwa pliku JSON</label>
+                            <input type="text" id="externaFilename" placeholder="externa_deploy" value="externa_deploy">
+                        </div>
+                        <div class="form-group">
+                            <label>runat</label>
+                            <select id="externaRunat">
+                                <option value="18:00" selected>18:00</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>waitfor</label>
+                            <input type="text" id="externaWaitfor" placeholder="Opcjonalne" value="">
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top:8px; flex:1; display:flex; flex-direction:column;">
+                        <label>Lista build├│w (jeden na lini─Ö)</label>
+                        <textarea id="externaBuildList" class="externa-textarea" rows="12" placeholder="Build_Deploy_App1&#10;Build_Deploy_App2&#10;Build_Deploy_App3&#10;..."></textarea>
+                    </div>
+
+                    <div class="externa-actions">
+                        <span class="externa-count" id="externaBuildCount">0 build├│w</span>
+                        <button class="btn btn-primary" onclick="App.generateExterna()">Generuj JSON</button>
+                    </div>
+                </div>
+
+                <div class="externa-preview card">
+                    <div class="preview-header">
+                        <h3 class="section-title">Podgl─àd JSON</h3>
+                        <div class="preview-actions">
+                            <button class="btn btn-secondary btn-sm" onclick="App.copyExternaJson()">Kopiuj</button>
+                            <button class="btn btn-primary btn-sm" onclick="App.downloadExternaJson()">Pobierz</button>
+                        </div>
+                    </div>
+                    <pre class="json-output" id="externaJsonPreview">{ }</pre>
+                </div>
+            </div>
+        </div><!-- /externaMode -->
+    </div><!-- /container -->
+
+    <!-- Node Edit Modal -->
+    <div class="modal-overlay" id="nodeEditModal" style="display:none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3>Edytuj Build</h3>
+                <button class="modal-close" onclick="App.closeNodeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Nazwa (klucz w builds)</label>
+                    <input type="text" id="nodeEditName" placeholder="np. zadanie1">
+                </div>
+                <div class="form-group">
+                    <label>buildid</label>
+                    <input type="text" id="nodeEditBuildId" placeholder="NAZWA_BUILDA">
+                </div>
+                <div class="form-group">
+                    <label>enabled</label>
+                    <select id="nodeEditEnabled">
+                        <option value="1">1 (Tak)</option>
+                        <option value="0">0 (Nie)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>waitfor (automatycznie z po┼é─àcze┼ä)</label>
+                    <input type="text" id="nodeEditWaitfor" placeholder="Ustawiane przez strza┼éki" readonly>
+                </div>
+                <div class="form-group">
+                    <label>retry</label>
+                    <input type="text" id="nodeEditRetry" placeholder="Opcjonalne">
+                </div>
+                <div class="form-group">
+                    <label>external</label>
+                    <input type="text" id="nodeEditExternal" placeholder="Opcjonalne">
+                </div>
+                <div class="form-group">
+                    <label>stop (opcjonalne)</label>
+                    <input type="text" id="nodeEditStop" placeholder="Opcjonalne">
+                </div>
+
+                <!-- TC_SQL params -->
+                <div id="tcSqlParams" class="tc-params-section" style="display:none;">
+                    <div class="tc-params-header">Parametry TC_SQL</div>
+                    <div class="form-group">
+                        <label>sqlserver</label>
+                        <input type="text" id="nodeEditSqlServer" placeholder="np. SQLSERVER01">
+                    </div>
+                    <div class="form-group">
+                        <label>database</label>
+                        <input type="text" id="nodeEditDatabase" placeholder="np. MyDatabase">
+                    </div>
+                    <div class="form-group">
+                        <label>file</label>
+                        <input type="text" id="nodeEditSqlFile" placeholder="np. script.sql">
+                    </div>
+                </div>
+
+                <!-- TC_PowerShell params -->
+                <div id="tcPowerShellParams" class="tc-params-section" style="display:none;">
+                    <div class="tc-params-header">Parametry TC_PowerShell</div>
+                    <div class="form-group">
+                        <label>servers</label>
+                        <input type="text" id="nodeEditPsServers" placeholder="np. SRV01,SRV02">
+                    </div>
+                    <div class="form-group">
+                        <label>file</label>
+                        <input type="text" id="nodeEditPsFile" placeholder="np. deploy.ps1">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger" onclick="App.deleteNode()">Usu┼ä Build</button>
+                <button class="btn btn-primary" onclick="App.saveNodeEdit()">Zapisz</button>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <div class="footer-container">
+            <img src="images/logo.jpg" alt="Logo" class="logo">
+            <span class="footer-text">(c) 2026 DEI-ZUK-C | ┼ü.Peryt</span>
+        </div>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
+```
+
+#### [styles.css]
+```css
+/* Deploy JSON Generator - Style matching prodHealthCheck standard */
+/* Font & Reset */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f5f5f5;
+    color: #333333;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+.header {
+    background: #F6F6F6;
+    border-bottom: 2px solid #E60000;
+    padding: 10px 0;
+}
+
+.header-content {
+    width: 95%;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header .logo {
+    height: 48px;
+}
+
+.header-title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.json-icon {
+    flex-shrink: 0;
+    animation: json-icon-float 2.2s ease-in-out infinite;
+}
+
+.json-file,
+.json-fold {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.json-braces {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    fill: #E60000;
+    transform-origin: center;
+    animation: json-braces-pulse 1.6s ease-in-out infinite;
+}
+
+.json-label {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    fill: #E60000;
+    opacity: 0.8;
+    animation: json-label-glow 1.6s ease-in-out infinite;
+}
+
+@keyframes json-icon-float {
+    0% { transform: translateY(0px); }
+    50% { transform: translateY(-1px); }
+    100% { transform: translateY(0px); }
+}
+
+@keyframes json-braces-pulse {
+    0% { opacity: 0.45; transform: scale(0.96); }
+    50% { opacity: 1; transform: scale(1); }
+    100% { opacity: 0.45; transform: scale(0.96); }
+}
+
+@keyframes json-label-glow {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { opacity: 0.7; }
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.header-info {
+    font-size: 13px;
+    color: #666;
+    font-weight: 500;
+}
+
+/* Footer */
+.footer {
+    background: #F6F6F6;
+    border-top: 2px solid #E60000;
+    padding: 15px 0;
+    margin-top: auto;
+}
+
+.footer-container {
+    display: flex;
+    align-items: center;
+    width: 95%;
+    margin: 0 auto;
+}
+
+.footer .logo {
+    height: 35px;
+    margin-right: 15px;
+}
+
+.footer-text {
+    font-size: 14px;
+    color: #666;
+}
+
+/* Mode Tabs (header) */
+.header-center {
+    display: flex;
+    align-items: center;
+}
+
+.mode-tabs {
+    display: flex;
+    gap: 4px;
+    background: #eee;
+    border-radius: 22px;
+    padding: 3px;
+}
+
+.mode-tab {
+    padding: 6px 20px;
+    border: none;
+    border-radius: 20px;
+    background: transparent;
+    color: #666;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-family: inherit;
+}
+
+.mode-tab:hover {
+    color: #333;
+}
+
+.mode-tab.active {
+    background: #E60000;
+    color: #fff;
+    box-shadow: 0 2px 6px rgba(230, 0, 0, 0.3);
+}
+
+/* Container */
+.container {
+    width: 95%;
+    margin: 10px auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/* Cards */
+.card {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+/* Server Tabs */
+.server-tabs-container {
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 10px 15px;
+    margin-bottom: 15px;
+}
+
+.tabs-wrapper {
+    display: flex;
+    gap: 10px;
+}
+
+.tab {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 20px;
+    background: #f5f5f5;
+    color: #333;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-family: inherit;
+}
+
+.tab:hover {
+    background: #e8e8e8;
+    transform: translateY(-1px);
+}
+
+.tab.active {
+    background: #E60000;
+    color: #ffffff;
+    box-shadow: 0 3px 8px rgba(230, 0, 0, 0.3);
+}
+
+/* Flow Tabs */
+.flow-tabs-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 10px 15px;
+}
+
+.flow-tabs-wrapper {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 1;
+}
+
+.flow-tab {
+    padding: 6px 16px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    background: #f8f9fa;
+    color: #333;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: inherit;
+}
+
+.flow-tab:hover {
+    background: #e8e8e8;
+}
+
+.flow-tab.active {
+    background: #E60000;
+    color: #fff;
+    border-color: #E60000;
+    box-shadow: 0 2px 6px rgba(230, 0, 0, 0.3);
+}
+
+.flow-tab .flow-tab-close {
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.7;
+    cursor: pointer;
+    margin-left: 4px;
+}
+
+.flow-tab .flow-tab-close:hover {
+    opacity: 1;
+}
+
+.btn-add-flow {
+    width: 36px;
+    height: 36px;
+    border: 2px dashed #ccc;
+    border-radius: 50%;
+    background: transparent;
+    color: #999;
+    font-size: 20px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-family: inherit;
+}
+
+.btn-add-flow:hover {
+    border-color: #E60000;
+    color: #E60000;
+    background: #fff5f5;
+}
+
+.btn-close-all-flows {
+    padding: 6px 14px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    background: #f5f5f5;
+    color: #999;
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    flex-shrink: 0;
+}
+
+.btn-close-all-flows:hover {
+    border-color: #c62828;
+    color: #c62828;
+    background: #fff5f5;
+}
+
+/* Main Content Layout */
+.main-content {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 15px;
+}
+
+/* Section titles */
+.section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 12px;
+}
+
+/* Flow Settings */
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-group label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.form-group input,
+.form-group select {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    color: #333;
+    background: #fff;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #E60000;
+    box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.2);
+}
+
+.form-group input[readonly] {
+    background: #f0f0f0;
+    color: #999;
+}
+
+/* Buttons */
+.btn {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.btn-sm {
+    padding: 5px 12px;
+    font-size: 12px;
+}
+
+.btn-primary {
+    background: #E60000;
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: #cc0000;
+    box-shadow: 0 2px 6px rgba(230, 0, 0, 0.3);
+}
+
+.btn-secondary {
+    background: #f0f0f0;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
+.btn-secondary:hover {
+    background: #e0e0e0;
+}
+
+.btn-danger {
+    background: #c62828;
+    color: #fff;
+}
+
+.btn-danger:hover {
+    background: #b71c1c;
+}
+
+/* Canvas */
+.canvas-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.canvas-toolbar .section-title {
+    margin-bottom: 0;
+}
+
+.toolbar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.canvas-info {
+    font-size: 12px;
+    color: #999;
+    margin-bottom: 10px;
+    padding: 6px 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.connector-hint {
+    color: #E60000;
+    font-weight: bold;
+}
+
+.canvas {
+    position: relative;
+    min-height: 450px;
+    border: 2px dashed #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    overflow: hidden;
+}
+
+.connections-svg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.connections-svg line,
+.connections-svg path {
+    pointer-events: stroke;
+}
+
+/* Nodes */
+.node {
+    position: absolute;
+    min-width: 160px;
+    background: #fff;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    cursor: grab;
+    z-index: 2;
+    user-select: none;
+    transition: box-shadow 0.2s, border-color 0.2s;
+}
+
+.node:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    border-color: #bbb;
+}
+
+.node.selected {
+    border-color: #E60000;
+    box-shadow: 0 4px 12px rgba(230, 0, 0, 0.2);
+}
+
+.node.dragging {
+    cursor: grabbing;
+    opacity: 0.9;
+    z-index: 10;
+}
+
+.node-header {
+    padding: 8px 12px;
+    background: #f0f0f0;
+    border-radius: 6px 6px 0 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.node-header .node-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.node-edit-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 14px;
+    color: #999;
+    padding: 0 4px;
+    transition: color 0.2s;
+}
+
+.node-edit-btn:hover {
+    color: #E60000;
+}
+
+.node-body {
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #666;
+}
+
+.node-body .node-buildid {
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 11px;
+    color: #333;
+    word-break: break-all;
+}
+
+.node-body .node-status {
+    margin-top: 4px;
+    font-size: 10px;
+}
+
+.node-status .enabled {
+    color: #2e7d32;
+}
+
+.node-status .disabled {
+    color: #c62828;
+}
+
+/* Connector points */
+.connector {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #E60000;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    cursor: crosshair;
+    z-index: 5;
+    transition: transform 0.2s;
+}
+
+.connector:hover {
+    transform: scale(1.3);
+}
+
+.connector.out {
+    bottom: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.connector.out:hover {
+    transform: translateX(-50%) scale(1.3);
+}
+
+.connector.in {
+    top: -7px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+.connector.in:hover {
+    transform: translateX(-50%) scale(1.3);
+}
+
+/* Connection arrows */
+.connection-line {
+    stroke: #E60000;
+    stroke-width: 2;
+    fill: none;
+    pointer-events: stroke;
+    cursor: pointer;
+}
+
+.connection-line:hover {
+    stroke-width: 4;
+    stroke: #cc0000;
+}
+
+.connection-arrowhead {
+    fill: #E60000;
+}
+
+.connection-temp {
+    stroke: #E60000;
+    stroke-width: 2;
+    stroke-dasharray: 6 3;
+    fill: none;
+}
+
+/* Connection delete button */
+.connection-delete {
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.connection-delete:hover {
+    opacity: 1 !important;
+}
+
+/* JSON Preview */
+.right-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.json-preview {
+    position: static;
+}
+
+.preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.preview-header .section-title {
+    margin-bottom: 0;
+}
+
+.preview-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.json-output {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    padding: 15px;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    overflow-x: auto;
+    max-height: 400px;
+    overflow-y: auto;
+    white-space: pre;
+    tab-size: 4;
+}
+
+/* Syntax highlighting in JSON */
+.json-key { color: #9cdcfe; }
+.json-string { color: #ce9178; }
+.json-number { color: #b5cea8; }
+
+/* All files list */
+.all-files-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.file-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    font-size: 12px;
+    border: 1px solid #eee;
+}
+
+.file-item .file-name {
+    font-weight: 600;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.file-item .file-builds {
+    color: #666;
+}
+
+.validation-error {
+    border-color: #c62828 !important;
+    box-shadow: 0 0 0 2px rgba(198, 40, 40, 0.2) !important;
+}
+
+.validation-msg {
+    color: #c62828;
+    font-size: 11px;
+    margin-top: 2px;
+}
+
+/* Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.modal-box {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    width: 450px;
+    max-width: 90vw;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid #eee;
+}
+
+.modal-header h3 {
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #999;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #333;
+}
+
+.modal-body {
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.modal-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #eee;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Toast notifications */
+.toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 2000;
+    animation: toastIn 0.3s ease, toastOut 0.3s ease 2.7s forwards;
+}
+
+.toast.success { background: #2e7d32; }
+.toast.error { background: #c62828; }
+.toast.info { background: #1565c0; }
+
+@keyframes toastIn {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes toastOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+}
+
+/* TC Build Params Section */
+.tc-params-section {
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    background: #f8f9fa;
+}
+
+.tc-params-header {
+    font-size: 12px;
+    font-weight: 600;
+    color: #E60000;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+/* Bulk Paste Drawer */
+#editorMode {
+    position: relative;
+}
+
+.bulk-drawer-tab {
+    position: fixed;
+    left: 0;
+    top: 220px;
+    z-index: 80;
+    border: none;
+    border-radius: 0 10px 10px 0;
+    background: #E60000;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    width: 38px;
+    min-height: 170px;
+    padding: 10px 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.bulk-drawer-tab:hover {
+    background: #cc0000;
+    transform: translateX(2px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.24);
+}
+
+.bulk-tab-arrow {
+    font-size: 15px;
+    line-height: 1;
+    animation: bulk-arrow-pulse 1.4s ease-in-out infinite;
+}
+
+.bulk-tab-text {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    letter-spacing: 0.8px;
+    line-height: 1;
+}
+
+@keyframes bulk-arrow-pulse {
+    0% { transform: translateX(0); opacity: 0.75; }
+    50% { transform: translateX(2px); opacity: 1; }
+    100% { transform: translateX(0); opacity: 0.75; }
+}
+
+.bulk-drawer-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+    z-index: 98;
+}
+
+.bulk-drawer-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bulk-drawer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 360px;
+    max-width: calc(100vw - 24px);
+    height: 100vh;
+    background: #ffffff;
+    border-right: 1px solid #e6e6e6;
+    box-shadow: 6px 0 20px rgba(0,0,0,0.16);
+    transform: translateX(-102%);
+    transition: transform 0.28s ease;
+    z-index: 99;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 16px;
+    gap: 12px;
+}
+
+.bulk-drawer.open {
+    transform: translateX(0);
+}
+
+.bulk-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #ececec;
+    padding-bottom: 8px;
+}
+
+.bulk-drawer-header .section-title {
+    margin-bottom: 0;
+}
+
+.bulk-drawer-close {
+    border: none;
+    background: transparent;
+    color: #777;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+.bulk-drawer-close:hover {
+    color: #333;
+}
+
+.bulk-drawer-desc {
+    font-size: 12px;
+    line-height: 1.45;
+    color: #666;
+    margin: 0;
+}
+
+.bulk-drawer .externa-textarea {
+    flex: 1;
+    min-height: 280px;
+}
+
+.bulk-drawer-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 4px;
+}
+
+/* Externa Mode */
+#externaMode {
+    height: calc(100vh - 90px);
+    display: flex;
+    flex-direction: column;
+}
+
+.externa-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    flex: 1;
+    min-height: 0;
+}
+
+.externa-layout > .card {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+    overflow: hidden;
+}
+
+.externa-desc {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+
+.externa-settings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.externa-textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-family: 'Consolas', 'Monaco', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    resize: vertical;
+    color: #333;
+    background: #fafafa;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    flex: 1;
+    min-height: 0;
+}
+
+.externa-textarea:focus {
+    outline: none;
+    border-color: #E60000;
+    box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.2);
+    background: #fff;
+}
+
+.externa-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.externa-count {
+    font-size: 13px;
+    color: #666;
+    font-weight: 500;
+}
+
+.externa-preview {
+    display: flex;
+    flex-direction: column;
+}
+
+.externa-preview .json-output {
+    max-height: none;
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+    .settings-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    .externa-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .settings-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .header-left {
+        flex-direction: column;
+        gap: 4px;
+        align-items: flex-start;
+    }
+    .bulk-drawer {
+        width: 100vw;
+        max-width: 100vw;
+    }
+    .bulk-drawer-tab {
+        top: auto;
+        bottom: 84px;
+        font-size: 12px;
+        width: 34px;
+        min-height: 145px;
+        padding: 8px 6px;
+    }
+}
+
+@media (max-width: 600px) {
+    .settings-grid {
+        grid-template-columns: 1fr;
+    }
+}
+```
+
+#### [web.config]
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <system.webServer>
+        <staticContent>
+            <remove fileExtension=".json" />
+            <mimeMap fileExtension=".json" mimeType="application/json" />
+            <remove fileExtension=".woff" />
+            <mimeMap fileExtension=".woff" mimeType="application/font-woff" />
+            <remove fileExtension=".woff2" />
+            <mimeMap fileExtension=".woff2" mimeType="application/font-woff2" />
+        </staticContent>
+        <defaultDocument>
+            <files>
+                <clear />
+                <add value="index.html" />
+            </files>
+        </defaultDocument>
+        <httpProtocol>
+            <customHeaders>
+                <add name="X-Content-Type-Options" value="nosniff" />
+                <add name="X-Frame-Options" value="SAMEORIGIN" />
+                <add name="X-XSS-Protection" value="1; mode=block" />
+            </customHeaders>
+        </httpProtocol>
+    </system.webServer>
+</configuration>
+```
+
+#### [whoami.aspx]
+```asp
+<%@ Page Language="C#" %>
+<%
+    Response.ContentType = "application/json";
+    Response.Cache.SetCacheability(HttpCacheability.NoCache);
+    string user = HttpContext.Current.User.Identity.Name ?? "";
+    Response.Write("{\"username\":\"" + user.Replace("\\", "\\\\") + "\"}");
+%>
+```
+
+#### [DOKUMENTACJA_TECHNICZNA.md]
+```markdown
+# Deploy JSON Generator ΓÇö dokumentacja techniczna
+
+## 1. Cel aplikacji
+Aplikacja generuje pliki JSON dla proces├│w deploy i pozwala wizualnie budowa─ç zale┼╝no┼¢ci `waitfor` mi─Ödzy buildami oraz mi─Ödzy plikami JSON.
+
+## 2. Architektura
+- Frontend: czysty HTML/CSS/JavaScript
+- Brak backendu aplikacyjnego (dzia┼éanie w przegl─àdarce)
+- Stan aplikacji trzymany w `localStorage`
+
+Pliki:
+- `index.html` ΓÇö struktura UI
+- `styles.css` ΓÇö stylowanie i animacje
+- `app.js` ΓÇö logika biznesowa, flow, walidacje, generacja JSON
+
+## 3. Struktura danych (stan)
+W `app.js` aplikacja utrzymuje:
+- `state.flows` ΓÇö s┼éownik flow (ka┼╝dy flow to przysz┼éy plik JSON)
+- `state.flowOrder` ΓÇö kolejno┼¢─ç flow
+- `state.currentFlowId` ΓÇö aktywny flow
+- `state.currentServer` ΓÇö aktywny serwer TeamCity
+- `nodes` i `connections` w ramach flow
+
+Node (build) zawiera m.in.:
+- `name`
+- `buildid`
+- `enabled`
+- `waitfor`
+- `retry`
+- `external`
+- `params` (tylko dla specjalnych build├│w)
+
+## 4. Specjalne buildy TC i params
+Obs┼éugiwane s─à 2 specjalne typy `buildid`:
+- `TC_SQL`
+- `TC_PowerShell`
+
+Dzia┼éanie:
+- rozpoznanie jest **case-insensitive**,
+- dla tych build├│w dozwolone s─à duplikaty `buildid`,
+- UI pokazuje dedykowane pola `params`,
+- `params` trafiaj─à do wygenerowanego JSON.
+
+Funkcje kluczowe w `app.js`:
+- `isTcSql(buildId)`
+- `isTcPowerShell(buildId)`
+- `updateTcParamsVisibility(buildId)`
+- `saveTcParams(node)`
+- `validateBuildId(flow, buildid, excludeNodeId)`
+
+Schemat `params`:
+
+Dla SQL:
+```json
+"params": {
+  "sqlserver": "",
+  "database": "",
+  "file": ""
+}
+```
+
+Dla PowerShell:
+```json
+"params": {
+  "servers": "",
+  "file": ""
+}
+```
+
+## 5. Szybkie dodawanie build├│w (drawer)
+Sekcja ΓÇ₧Szybkie dodawanie build├│wΓÇ¥ dzia┼éa jako wysuwany panel z lewej.
+
+Elementy:
+- pionowy trigger z etykiet─à i strza┼ék─à,
+- overlay,
+- drawer z textarea i akcjami.
+
+Funkcje:
+- `toggleBulkDrawer()`
+- `closeBulkDrawer()`
+- `bulkAddBuilds()`
+
+Zachowanie:
+- po udanym dodaniu build├│w drawer zamyka si─Ö automatycznie,
+- `Esc` zamyka modal node i drawer,
+- przy konflikcie nazw node nadawane s─à sufiksy `_2`, `_3`, ...
+
+## 6. Generacja JSON
+Funkcja `generateJson(flow)` buduje wynikowy obiekt.
+
+Zasady:
+- `tcserver` jest wybierany na podstawie aktywnego serwera,
+- `waitfor` na poziomie flow jest budowany z zale┼╝no┼¢ci mi─Ödzy plikami,
+- `builds` powstaj─à z nodeΓÇÖ├│w po uporz─àdkowaniu grafu,
+- `params` s─à dok┼éadane tylko gdy node je posiada.
+
+## 7. UI/UX ΓÇö wa┼╝ne elementy
+- Header: logo + animowana ikona JSON + tytu┼é
+- Footer: wz├│r z `prodHealtchCheck` (logo + tekst)
+- `Podgl─àd JSON`: przewija si─Ö razem z tre┼¢ci─à (bez sticky)
+- Favicon: odno┼¢nik w `<head>` wskazuje `images/favicon.png`
+
+## 8. Trwa┼éo┼¢─ç danych
+`saveState()` i `loadState()` zapisuj─à/odczytuj─à stan z `localStorage` (`deployJsonGenerator`).
+
+Migracje w kodzie:
+- konwersja starych format├│w `interflowWaitfor` na tablic─Ö.
+
+## 9. Punkty rozszerze┼ä
+Najbezpieczniej rozszerza─ç przez:
+- nowe pola node w `openNodeModal()` / `saveNodeEdit()` / `generateJson()`
+- nowe walidacje w sekcji `VALIDATORS`
+- nowe warianty `buildid` przez helpery podobne do `isTcSql/isTcPowerShell`
+
+## 10. Utrzymanie
+Po zmianach UI/logiki zalecane minimum:
+- sprawdzenie edycji node i zapisu JSON,
+- test bulk drawer (open/close, dodawanie, konflikt nazw),
+- test trybu External,
+- test persystencji po od┼¢wie┼╝eniu strony.
+```
+
+#### [DOKUMENTACJA_BUILDID_TC.md]
+```markdown
+# Dokumentacja: buildid `TC_SQL` i `TC_PowerShell`
+
+## Cel
+Ten dokument opisuje:
+- jak dzia┼éa obs┼éuga specjalnych build├│w `TC_SQL` i `TC_PowerShell`,
+- gdzie dok┼éadnie zmieni─ç nazwy tych build├│w w kodzie,
+- jakie s─à skutki zmiany i jak je bezpiecznie wykona─ç.
+
+---
+
+## Aktualne dzia┼éanie
+
+Aplikacja ma dwa specjalne typy `buildid`:
+- `TC_SQL`
+- `TC_PowerShell`
+
+Rozpoznawanie jest **case-insensitive** (bez znaczenia wielko┼¢ci liter), czyli dzia┼éaj─à np.:
+- `tc_sql`, `TC_SQL`, `Tc_Sql`
+- `tc_powershell`, `TC_POWERSHELL`, `Tc_PowerShell`
+
+Dla tych build├│w:
+1. Pokazuj─à si─Ö dedykowane pola `params` w oknie edycji noda.
+2. Duplikaty `buildid` s─à dozwolone (pod warunkiem unikalnej nazwy noda/klucza w `builds`).
+3. Do JSON-a trafia sekcja `params` z odpowiednimi polami.
+
+---
+
+## Gdzie zmieni─ç nazw─Ö buildid (najwa┼╝niejsze)
+
+## 1) Logika rozpoznania buildid (KRYTYCZNE)
+Plik: `app.js`
+
+Funkcje:
+- `isTcSql(buildId)`
+- `isTcPowerShell(buildId)`
+
+To one definiuj─à, jaka warto┼¢─ç `buildid` jest traktowana jako specjalna.
+
+Aktualnie:
+- `isTcSql` por├│wnuje do `'tc_sql'`
+- `isTcPowerShell` por├│wnuje do `'tc_powershell'`
+
+### Przyk┼éad zmiany
+Je┼¢li chcesz zmieni─ç nazwy na:
+- `SQL_JOB`
+- `PS_JOB`
+
+to zmie┼ä por├│wnania odpowiednio na:
+- `'sql_job'`
+- `'ps_job'`
+
+> Wa┼╝ne: zostaw `toLowerCase()`, ┼╝eby nadal dzia┼éa┼éo case-insensitive.
+
+---
+
+## 2) Mapa p├│l parametr├│w (informacyjnie)
+Plik: `app.js`
+
+Obiekt:
+- `TC_BUILD_PARAMS`
+
+Aktualnie:
+- `TC_SQL` ΓåÆ `sqlserver`, `database`, `file`
+- `TC_PowerShell` ΓåÆ `servers`, `file`
+
+Ta mapa jest dokumentacyjna/pomocnicza. G┼é├│wna logika i tak opiera si─Ö na funkcjach `isTcSql` i `isTcPowerShell`.
+
+Je┼¢li chcesz sp├│jno┼¢ci nazewnictwa, mo┼╝esz zaktualizowa─ç te┼╝ klucze w tej mapie do nowych nazw.
+
+---
+
+## 3) Miejsca zale┼╝ne od rozpoznania buildid
+Plik: `app.js`
+
+Poni┼╝sze miejsca **automatycznie** b─Öd─à dzia┼éa─ç po zmianie funkcji `isTcSql` i `isTcPowerShell`:
+- pokazywanie/ukrywanie sekcji parametr├│w (`updateTcParamsVisibility`),
+- zapis `params` (`saveTcParams`),
+- walidacja duplikat├│w buildid (`validateBuildId`).
+
+Nie trzeba ich przepisywa─ç r─Öcznie, je┼¢li dalej u┼╝ywaj─à funkcji helper.
+
+---
+
+## Schemat `params` w JSON
+
+### Dla SQL
+```json
+"params": {
+  "sqlserver": "",
+  "database": "",
+  "file": ""
+}
+```
+
+### Dla PowerShell
+```json
+"params": {
+  "servers": "",
+  "file": ""
+}
+```
+
+Sekcja `params` jest dodawana tylko dla specjalnych build├│w.
+
+---
+
+## Procedura bezpiecznej zmiany nazw buildid
+
+1. Zmie┼ä por├│wnania w `isTcSql` i `isTcPowerShell`.
+2. (Opcjonalnie) Zaktualizuj `TC_BUILD_PARAMS` dla sp├│jno┼¢ci.
+3. Uruchom aplikacj─Ö i sprawd┼║:
+   - czy po wpisaniu nowego `buildid` pojawiaj─à si─Ö w┼éa┼¢ciwe pola,
+   - czy duplikaty nowego `buildid` s─à dozwolone,
+   - czy JSON zawiera poprawne `params`.
+4. Sprawd┼║ starsze flow zapisane w localStorage (mog─à mie─ç stare `buildid`).
+
+---
+
+## Kompatybilno┼¢─ç wsteczna
+
+Po zmianie nazw `buildid`, stare wpisy (`TC_SQL`, `TC_PowerShell`) mog─à przesta─ç uruchamia─ç specjalne zachowanie, je┼¢li nie przewidzisz alias├│w.
+
+Je┼¢li chcesz zachowa─ç kompatybilno┼¢─ç, dodaj aliasy w helperach, np.:
+- `isTcSql` akceptuje stare i nowe warto┼¢ci,
+- `isTcPowerShell` akceptuje stare i nowe warto┼¢ci.
+
+---
+
+## Szybka checklista
+
+- [ ] Zmienione `isTcSql`
+- [ ] Zmienione `isTcPowerShell`
+- [ ] (Opcjonalnie) zaktualizowane `TC_BUILD_PARAMS`
+- [ ] Test UI (modal)
+- [ ] Test JSON (`params`)
+- [ ] Test duplikat├│w buildid
+
+---
+
+## Pliki powi─àzane
+- `app.js` ΓÇö logika rozpoznawania `buildid`, walidacja, zapis `params`
+- `index.html` ΓÇö pola formularza dla `TC_SQL` i `TC_PowerShell`
+- `styles.css` ΓÇö style sekcji parametr├│w
+```
+
+#### [INSTRUKCJA_UZYTKOWNIKA.md]
+```markdown
+# Deploy JSON Generator ΓÇö instrukcja u┼╝ytkownika
+
+## 1. Do czego s┼éu┼╝y aplikacja
+Aplikacja pomaga tworzy─ç pliki JSON do deploy├│w:
+- dodajesz buildy,
+- ustawiasz zale┼╝no┼¢ci mi─Ödzy buildami,
+- ustawiasz zale┼╝no┼¢ci mi─Ödzy plikami JSON,
+- pobierasz gotowe pliki.
+
+## 2. Podstawowy workflow
+1. Wybierz serwer TeamCity.
+2. Ustaw nazw─Ö pliku JSON i parametry flow (np. `runat`, `enabled`).
+3. Dodaj buildy:
+   - r─Öcznie przyciskiem `+ Dodaj Build`, albo
+   - przez panel `ΓÜí Szybkie buildy` (wklej list─Ö build├│w).
+4. Po┼é─àcz nodeΓÇÖy na diagramie, aby ustawi─ç `waitfor`.
+5. Podejrzyj JSON po prawej stronie.
+6. Pobierz jeden plik lub wszystkie pliki JSON.
+
+## 3. Szybkie dodawanie build├│w
+- Kliknij pionowy przycisk `ΓÜí Szybkie buildy` po lewej stronie.
+- Wklej list─Ö build├│w (jeden build na lini─Ö).
+- Kliknij `Dodaj buildy`.
+
+Wa┼╝ne:
+- duplikaty na wklejonej li┼¢cie s─à blokowane,
+- gdy nazwa builda koliduje z istniej─àc─à nazw─à node, aplikacja automatycznie doda sufiks (`_2`, `_3`...).
+
+## 4. Specjalne buildy: TC_SQL i TC_PowerShell
+W oknie edycji builda wpisz w `buildid`:
+- `TC_SQL` (dowolna wielko┼¢─ç liter), albo
+- `TC_PowerShell` (dowolna wielko┼¢─ç liter).
+
+Po wpisaniu pojawi─à si─Ö dodatkowe pola `params`.
+
+Dla `TC_SQL`:
+- `sqlserver`
+- `database`
+- `file`
+
+Dla `TC_PowerShell`:
+- `servers`
+- `file`
+
+## 5. Zale┼╝no┼¢ci
+### 5.1 Mi─Ödzy buildami
+- przeci─àgnij po┼é─àczenie z jednego nodeΓÇÖa na drugi,
+- docelowy node dostanie `waitfor` wskazuj─àcy poprzedni build.
+
+### 5.2 Mi─Ödzy plikami JSON
+- u┼╝yj sekcji `Zale┼╝no┼¢ci mi─Ödzy plikami JSON`,
+- zaznacz, kt├│re pliki maj─à by─ç wykonane wcze┼¢niej.
+
+## 6. Tryb External
+W zak┼éadce `External`:
+- wklejasz list─Ö build├│w,
+- generujesz JSON z `externa: 1` dla ka┼╝dego builda,
+- kopiujesz lub pobierasz wynik.
+
+## 7. Najcz─Östsze wskaz├│wki
+- Je┼¢li nie widzisz dodatkowych p├│l TC: sprawd┼║, czy `buildid` jest ustawiony na `TC_SQL` lub `TC_PowerShell`.
+- Je┼¢li panel szybkich build├│w nie jest widoczny: u┼╝yj pionowego triggera po lewej.
+- Je┼¢li chcesz wyczy┼¢ci─ç flow: u┼╝yj przycisku `Wyczy┼¢─ç` na toolbarze diagramu.
+
+## 8. Favicon
+Aplikacja ma odno┼¢nik do favicon:
+- `images/favicon.png`
+
+Wystarczy podmieni─ç ten plik we w┼éasnym katalogu `images`.
+
+## 9. Zapisywanie pracy
+Stan aplikacji zapisuje si─Ö automatycznie w przegl─àdarce (localStorage), wi─Öc po od┼¢wie┼╝eniu strony dane powinny wr├│ci─ç.
+```
+
+#### [.claude/CLAUDE.md]
+```markdown
+# CLAUDE.md ΓÇö Globalne regu┼éy Claude Code
+
+---
+
+## Γ¢ö REGU┼üA ZERO ΓÇö ZAKAZ SAMODZIELNEJ PRACY
+
+**Opus NIE wykonuje zada┼ä samodzielnie. Nigdy. Bez wyj─àtk├│w.**
+
+Ka┼╝de zadanie ΓÇö nawet "popraw liter├│wk─Ö" ΓÇö przechodzi przez ten pipeline:
+
+```
+ZADANIE ΓåÆ opus-token-guardian ΓåÆ gemini + codex ΓåÆ opus weryfikuje ΓåÆ codex-git commit+push
+```
+
+Naruszenie tego przep┼éywu jest b┼é─Ödem krytycznym.
+
+---
+
+## ≡ƒñû AGENCI ΓÇö ROLE SZTYWNE I NIEZMIENNE
+
+### opus-token-guardian ΓÇö ZAWSZE PIERWSZY, ZAWSZE
+Zanim cokolwiek zrobisz: wywo┼éaj opus-token-guardian.
+On dekomponuje zadanie i rozdziela prac─Ö. Opus nie zaczyna pracy dop├│ki guardian nie wyda dyspozycji.
+
+### gemini-delegator ΓÇö ANALIZA, CZYTANIE, RESEARCH
+Gemini dostaje **ZAWSZE**:
+- Czytanie jakiegokolwiek pliku (ka┼╝dego, bez wyj─àtku)
+- Analiza struktury projektu lub katalogu
+- Szukanie fraz, wzorc├│w, bug├│w w kodzie
+- Code review
+- Generowanie dokumentacji, README, komentarzy
+- Research bibliotek, API, dokumentacji
+- Analiza log├│w, CSV, danych tekstowych
+- B┼é─àd `exceeds maximum allowed tokens` ΓåÆ **natychmiast Gemini**, bez pytania
+
+### codex-executor ΓÇö PROSTE ZMIANY KODU
+Codex dostaje **ZAWSZE**:
+- Zmiany < 20 linii
+- Boilerplate, scaffolding
+- Proste funkcje (walidatory, formattery, konwertery)
+- Fixtures, conftest.py
+- Brakuj─àce importy
+- Formatowanie, sorting
+- Rename w jednym pliku
+- Skrypty jednorazowe
+
+### codex-git ΓÇö GIT COMMIT I PUSH PO KA┼╗DEJ ZMIANIE
+codex-git wywo┼éuje si─Ö **automatycznie po ka┼╝dej zmianie kodu** ΓÇö bez pytania, bez wyj─àtku.
+- `git add .`
+- `git commit -m "typ: opis"` (format: feat/fix/refactor/test/docs/chore/agent(gemini)/agent(codex))
+- `git push origin <branch_roboczy>`
+- **Nigdy nie pushuj do `main`**
+
+### opus ΓÇö TYLKO TO CZEGO AGENCI NIE MOG─ä
+Opus wchodzi **wy┼é─àcznie** gdy:
+- Z┼éo┼╝ona architektura lub logika biznesowa
+- Debugging trudnego problemu wymagaj─àcego rozumowania
+- Integracja mi─Ödzy modu┼éami
+- Weryfikacja i korekta wynik├│w agent├│w
+- Strategie tradingowe, modele ML, decyzje projektowe
+
+---
+
+## ΓÜÖ∩╕Å WYWO┼üANIE AGENT├ôW
+
+**Przez Task tool (preferowane):**
+```
+U┼╝yj agenta opus-token-guardian do zadania: [opis]
+```
+
+**Gemini bezpo┼¢rednio:**
+```powershell
+powershell -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path '.claude\agent-results' | Out-Null; gemini -p 'ZADANIE' 2>&1 | Out-File '.claude\agent-results\gemini_result.txt' -Encoding UTF8; Get-Content '.claude\agent-results\gemini_result.txt'"
+```
+
+**Codex bezpo┼¢rednio:**
+```powershell
+powershell -ExecutionPolicy Bypass -Command "New-Item -ItemType Directory -Force -Path '.claude\agent-results' | Out-Null; codex exec --full-auto 'ZADANIE' 2>&1 | Out-File '.claude\agent-results\codex_result.txt' -Encoding UTF8; Get-Content '.claude\agent-results\codex_result.txt'"
+```
+
+**Gemini + Codex r├│wnolegle:**
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\scripts\parallel-agents.ps1" `
+  -GeminiTask "ZADANIE" -CodexTask "ZADANIE" `
+  -WorkDir (Get-Location).Path
+```
+
+---
+
+## Γ£à PRZEP┼üYW KA┼╗DEGO ZADANIA
+
+```
+1. opus-token-guardian   ΓåÆ dekomponuje zadanie
+2. gemini-delegator      ΓåÆ czyta pliki, analizuje, researches
+3. codex-executor        ΓåÆ mechaniczne zmiany kodu
+4. opus                  ΓåÆ weryfikuje wyniki, wykonuje z┼éo┼╝on─à logik─Ö
+5. codex-git             ΓåÆ git add + commit + push (ZAWSZE, BEZ PYTANIA)
+```
+
+Kroki 2 i 3 mog─à by─ç r├│wnoleg┼ée je┼¢li zadania s─à niezale┼╝ne.
+
+---
+
+## ≡ƒîì ZASADY OG├ôLNE
+- J─Özyk: **polski**
+- Czasy: **Warsaw (CET/CEST)**
+- Logowanie: `logging`, nie `print()`
+- Nie modyfikuj `.env` bez pro┼¢by
+- Nie pushuj sekret├│w/kluczy
+
+---
+
+## ≡ƒöì WERYFIKACJA SYSTEMU
+```powershell
+powershell -ExecutionPolicy Bypass -File "$env:USERPROFILE\.claude\scripts\verify-agents.ps1" -Quick
+```
+```
+
+#### [.claude/settings.local.json]
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell:*)"
+    ]
+  }
+}
+```

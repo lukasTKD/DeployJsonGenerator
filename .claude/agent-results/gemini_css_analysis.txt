@@ -1,0 +1,13 @@
+﻿node.exe : Loaded cached credentials.
+At C:\Users\lpery\AppData\Roaming\npm\gemini.ps1:24 char:5
++     & "node$exe"  "$basedir/node_modules/@google/gemini-cli/dist/inde ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Loaded cached credentials.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Hook registry initialized with 0 hook entries
+Niestety, nie mog─Ö wykona─ç Twojego polecenia. Wskazany katalog `D:\PROD_REPO\IIS\prodHealtchCheck` znajduje si─Ö poza moim obszarem roboczym i nie mam do niego dost─Öpu.
+
+Pr├│bowa┼éem przeanalizowa─ç bie┼╝─àcy katalog `D:\PROD_REPO\IIS\DeployJsonGenerator`, ale nie znalaz┼éem w nim ┼╝adnych plik├│w HTML ani CSS, kt├│re s─à niezb─Ödne do przeprowadzenia analizy wygl─àdu i stylu aplikacji.
+
+W zwi─àzku z tym nie jestem w stanie przygotowa─ç raportu, o kt├│ry prosi┼ée┼¢.

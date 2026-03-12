@@ -1,0 +1,206 @@
+﻿node.exe : Loaded cached credentials.
+At C:\Users\lpery\AppData\Roaming\npm\gemini.ps1:24 char:5
++     & "node$exe" --no-warnings=DEP0040 "$basedir/node_modules/@google ...
++     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Loaded cached credentials.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+B─Öd─Ö teraz czyta┼é i analizowa┼é pliki `app.js`, `index.html` oraz `styles.css` (w zakresie podsumowania), aby przygotowa─ç szczeg├│┼éowy raport techniczny dotycz─àcy struktury zak┼éadek i konfiguracji build├│w.
+
+Poni┼╝ej znajduje si─Ö szczeg├│┼éowy raport z analizy plik├│w projektu **DeployJsonGenerator**.
+
+### A) STRUKTURA ZAKLADEK (Tabs)
+
+Zak┼éadki serwer├│w s─à zdefiniowane statycznie w HTML, a ich obs┼éuga odbywa si─Ö poprzez funkcj─Ö `switchServer` w JS. Zak┼éadki poszczeg├│lnych plik├│w (flow) s─à generowane dynamicznie.
+
+**HTML (definicja serwer├│w - index.html, linie 44-49):**
+```html
+<div class="server-tabs-container">
+    <div class="tabs-wrapper">
+        <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity.mbank.pl</button>
+        <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
+    </div>
+</div>
+```
+
+**JS (obs┼éuga prze┼é─àczania - app.js, linie 116-126):**
+```javascript
+function switchServer(server) {
+    state.currentServer = server;
+    document.querySelectorAll('.server-tabs-container .tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.server === server);
+    });
+    renderFlowTabs();
+    renderCurrentFlow();
+    updateJsonPreview();
+    renderAllFilesList();
+}
+```
+
+### B) KONFIGURACJA BUILDOW
+
+Buildy s─à przechowywane jako w─Öz┼éy (nodes) wewn─àtrz obiektu danego flow. Ka┼╝dy build to obiekt JS identyfikowany przez unikalne `nodeId`.
+
+**Struktura danych (app.js, linie 203-214):**
+```javascript
+flow.nodes[nodeId] = {
+    id: nodeId,
+    name: 'Build_' + state.nodeCounter, // Nazwa wy┼¢wietlana (klucz w JSON)
+    buildid: '',                        // Techniczne BuildID z TeamCity
+    enabled: 1,
+    waitfor: '',
+    retry: '1',
+    external: '',
+    x: Math.max(30, (canvasW - nodeW) / 2),
+    y: 30 + existingCount * 110
+};
+```
+
+**Przyk┼éad pe┼énej definicji builda (dla TC_SQL):**
+```javascript
+{
+    id: "node_1",
+    name: "Deploy_Database",
+    buildid: "TC_SQL",
+    enabled: 1,
+    waitfor: "Prerequisit_Task",
+    retry: "3",
+    params: {
+        sqlserver: "SQLPROD01",
+        database: "ClientDB",
+        file: "update_v1.sql"
+    },
+    x: 210,
+    y: 150
+}
+```
+
+### C) KONFIGURACJA ZAKLADEK (Parametry)
+
+Parametry g┼é├│wne (root-level) s─à definiowane w obiekcie flow. Mapowanie identyfikator├│w na adresy URL odbywa si─Ö w sta┼éej `SERVERS`.
+
+**Mapowanie URL (app.js, linie 8-11):**
+```javascript
+const SERVERS = {
+    haaTeamCity: 'https://haateamcity.mbank.pl',
+    teamcity: 'https://teamcity.mbank.pl'
+};
+```
+
+**Wzorzec parametr├│w flow (app.js, linie 58-71):**
+```javascript
+state.flows[id] = {
+    id,
+    filename: 'deploy_' + (state.flowOrder.length + 1),
+    server: state.currentServer,
+    enabled: 1,
+    runat: '18:00',
+    email: '',
+    blackout: '', // Pole backaut (nazwane blackout w kodzie)
+    sms: '',
+    change: '',
+    stop: '',
+    nodes: {},
+    connections: []
+};
+```
+
+### D) GENEROWANIE JSON
+
+Za generowanie odpowiada funkcja `generateJson`. JSON sk┼éada si─Ö z sekcji nag┼é├│wkowej i s┼éownika `builds`.
+
+**Funkcja (app.js, linie 490-530):**
+```javascript
+function generateJson(flow) {
+    if (!flow) return null;
+    const json = {
+        tcserver: SERVERS[flow.server],
+        enabled: flow.enabled,
+        runat: flow.runat || ''
+    };
+
+    if (flow.stop) json.stop = flow.stop;
+    if (flow.email) json.email = flow.email;
+    if (flow.blackout) json.blackout = flow.blackout;
+    if (flow.sms) json.sms = flow.sms;
+    if (flow.change) json.change = flow.change;
+
+    json.builds = {};
+    const orderedNodes = getOrderedNodes(flow);
+    orderedNodes.forEach(node => {
+        const build = {
+            enabled: node.enabled,
+            buildid: node.buildid || 'NAZWA_BUILDA'
+        };
+        if (node.waitfor) build.waitfor = node.waitfor;
+        if (node.retry) build.retry = node.retry;
+        if (node.external) build.external = node.external;
+        if (node.stop) build.stop = node.stop;
+        if (node.params && Object.keys(node.params).length > 0) {
+            build.params = { ...node.params };
+        }
+        json.builds[node.name] = build;
+    });
+    return json;
+}
+```
+
+### E) MODAL/FORMULARZ BUILDOW
+
+**HTML (index.html, linie 197-259):**
+Znajduje si─Ö tam `<div class="modal-overlay" id="nodeEditModal">`, kt├│ry zawiera pola dla:
+- `nodeEditName` (Nazwa/Klucz)
+- `nodeEditBuildId` (BuildID)
+- `nodeEditEnabled`
+- Sekcje specjalne dla `TC_SQL` i `TC_PowerShell`.
+
+**JS (app.js, linie 398-457):**
+Funkcje `openNodeModal(nodeId)` (┼éaduje dane do formularza) oraz `saveNodeEdit()` (zczytuje dane i aktualizuje stan).
+
+### F) WALIDACJA ARTIFACTORY
+
+**Brak.** Analiza kodu `app.js` nie wykaza┼éa istnienia ┼╝adnej walidacji zwi─àzanej z Artifactory. Istnieje jedynie walidacja unikalno┼¢ci nazw build├│w oraz BuildID (linie 184-197).
+
+### G) LISTA ISTNIEJ─äCYCH ZAK┼üADEK (Serwer├│w)
+
+| Identyfikator | Nazwa wy┼¢wietlana | URL |
+| :--- | :--- | :--- |
+| `haaTeamCity` | haaTeamCity.mbank.pl | https://haateamcity.mbank.pl |
+| `teamcity` | TeamCity.mbank.pl | https://teamcity.mbank.pl |
+
+### H) MODYFIKACJA - DODANIE NOWEJ ZAK┼üADKI
+
+Aby doda─ç now─à zak┼éadk─Ö (np. `nowySerwer`), nale┼╝y zmodyfikowa─ç dwa pliki:
+
+**1. Plik `app.js` (dodanie do sta┼éej SERVERS):**
+```javascript
+// Linia 10 - dodaj nowy wpis
+const SERVERS = {
+    haaTeamCity: 'https://haateamcity.mbank.pl',
+    teamcity: 'https://teamcity.mbank.pl',
+    nowySerwer: 'https://nowy-teamcity.mbank.pl' // <--- NOWA LINIA
+};
+```
+
+**2. Plik `index.html` (dodanie przycisku w UI):**
+```html
+<!-- Linia 47 - dodaj nowy button -->
+<div class="tabs-wrapper">
+    <button class="tab active" data-server="haaTeamCity" onclick="App.switchServer('haaTeamCity')">haaTeamCity.mbank.pl</button>
+    <button class="tab" data-server="teamcity" onclick="App.switchServer('teamcity')">TeamCity.mbank.pl</button>
+    <button class="tab" data-server="nowySerwer" onclick="App.switchServer('nowySerwer')">nowy-teamcity.mbank.pl</button> <!-- <--- NOWA LINIA -->
+</div>
+```
+
+**3. Plik `index.html` (dodanie do trybu External - opcjonalnie):**
+```html
+<!-- Linia 154 - dodaj opcj─Ö do selecta -->
+<select id="externaServer">
+    <option value="haaTeamCity">haaTeamCity.mbank.pl (https://haateamcity.mbank.pl)</option>
+    <option value="teamcity">TeamCity.mbank.pl (https://teamcity.mbank.pl)</option>
+    <option value="nowySerwer">nowy-teamcity.mbank.pl (https://nowy-teamcity.mbank.pl)</option> <!-- <--- NOWA LINIA -->
+</select>
+```
+
+### Podsumowanie styl├│w (styles.css)
+Plik `styles.css` zawiera definicje wizualne zgodne ze standardem mBanku (kolorystyka bia┼éo-czerwona `#E60000`). Obs┼éuguje animacje ikon JSON, stylizacj─Ö kart (`.card`), w─Öz┼é├│w diagramu (`.node`), po┼é─àcze┼ä SVG (`.connection-line`) oraz bocznego panelu ("drawer") do masowego dodawania build├│w. Uk┼éad jest responsywny (media queries dla 1200px, 768px i 600px).

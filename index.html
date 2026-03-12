@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deploy JSON Generator</title>
+    <link rel="icon" type="image/png" href="images/favicon.png">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -67,11 +68,6 @@
                             <input type="text" id="flowFilename" placeholder="deploy_config" onchange="App.updateFlowSetting('filename', this.value)">
                         </div>
                         <div class="form-group">
-                            <label>Data instalacji</label>
-                            <input type="date" id="deployFolderDate" onchange="App.updateExportDate(this.value)">
-                            <span class="inline-field-status" id="autoSaveStatus"></span>
-                        </div>
-                        <div class="form-group">
                             <label>runat</label>
                             <select id="flowRunat" onchange="App.updateFlowSetting('runat', this.value)">
                                 <option value="">-- brak --</option>
@@ -84,7 +80,10 @@
                                 <option value="0">0 (Nie)</option>
                             </select>
                         </div>
-                        <input type="hidden" id="flowWaitfor">
+                        <div class="form-group">
+                            <label>waitfor (pliki JSON)</label>
+                            <input type="text" id="flowWaitfor" placeholder="Ustawiane w sekcji zależności" readonly>
+                        </div>
                         <div class="form-group">
                             <label>email</label>
                             <input type="text" id="flowEmail" placeholder="Opcjonalne" onchange="App.updateFlowSetting('email', this.value)">
@@ -112,7 +111,6 @@
                             <button class="btn btn-primary" id="btnAddNodeGeneric" onclick="App.addNode()">+ Dodaj Build</button>
                             <button class="btn btn-secondary" id="btnAddSqlRunner" onclick="App.addSqlRunner()" style="display:none">+ Dodaj SQLRunner</button>
                             <button class="btn btn-secondary" id="btnAddScriptRunner" onclick="App.addScriptRunner()" style="display:none">+ Dodaj ScriptRunner</button>
-                            <button class="btn btn-secondary" id="btnAddRunOnlyRunner" onclick="App.addRunOnlyRunner()" style="display:none">+ Dodaj RunOnly</button>
                             <div class="ferryt-toolbar-actions" id="ferrytToolbarActions" style="display:none;">
                                 <!-- Generated dynamically -->
                             </div>
@@ -149,7 +147,7 @@
                         <h3 class="section-title">Podgląd JSON</h3>
                         <div class="preview-actions">
                             <button class="btn btn-secondary btn-sm" onclick="App.copyJson()">Kopiuj</button>
-                            <button class="btn btn-primary btn-sm" onclick="App.saveCurrentJsonToDeploy()">Zapisz</button>
+                            <button class="btn btn-primary btn-sm" onclick="App.downloadCurrentJson()">Pobierz</button>
                         </div>
                     </div>
                     <pre class="json-output" id="jsonPreview">{ }</pre>
@@ -159,7 +157,7 @@
                     <div class="preview-header">
                         <h3 class="section-title">Wszystkie pliki JSON</h3>
                         <div class="preview-actions">
-                            <button class="btn btn-primary" onclick="App.saveAllJsonToDeploy()">Zapisz wszystko do Deploya</button>
+                            <button class="btn btn-primary" onclick="App.downloadAllJson()">Pobierz wszystkie</button>
                         </div>
                     </div>
                     <div class="all-files-list" id="allFilesList">
@@ -269,19 +267,19 @@
                         <option value="0">0 (Nie)</option>
                     </select>
                 </div>
-                <div class="form-group build-hidden-field" id="nodeEditWaitforGroup">
+                <div class="form-group">
                     <label>waitfor (automatycznie z połączeń)</label>
                     <input type="text" id="nodeEditWaitfor" placeholder="Ustawiane przez strzałki" readonly>
                 </div>
-                <div class="form-group" id="nodeEditRetryGroup">
+                <div class="form-group">
                     <label>retry</label>
                     <input type="text" id="nodeEditRetry" placeholder="Opcjonalne">
                 </div>
-                <div class="form-group" id="nodeEditExternalGroup">
+                <div class="form-group">
                     <label>external</label>
                     <input type="text" id="nodeEditExternal" placeholder="Opcjonalne">
                 </div>
-                <div class="form-group" id="nodeEditStopGroup">
+                <div class="form-group">
                     <label>stop (opcjonalne)</label>
                     <input type="text" id="nodeEditStop" placeholder="Opcjonalne">
                 </div>
@@ -313,23 +311,6 @@
                     <div class="form-group">
                         <label>file</label>
                         <input type="text" id="nodeEditPsFile" placeholder="np. deploy.ps1">
-                    </div>
-                </div>
-
-                <!-- TC_RunOnly params -->
-                <div id="tcRunOnlyParams" class="tc-params-section" style="display:none;">
-                    <div class="tc-params-header">Parametry TC_RunOnly</div>
-                    <div class="form-group">
-                        <label>inventory_path</label>
-                        <input type="text" id="nodeEditRunOnlyInventory" placeholder="np. /path/to/inventory">
-                    </div>
-                    <div class="form-group">
-                        <label>git.envbook.repo.branch</label>
-                        <input type="text" id="nodeEditRunOnlyBranch" placeholder="np. master">
-                    </div>
-                    <div class="form-group">
-                        <label>playbook_path</label>
-                        <input type="text" id="nodeEditRunOnlyPlaybook" placeholder="np. /path/to/playbook.yml">
                     </div>
                 </div>
 

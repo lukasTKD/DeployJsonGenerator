@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<job id="save-deploys">
+  <script language="JScript">
+<![CDATA[
+function writeResponse(statusCode, reason, payload) {
+    WScript.StdOut.WriteLine("Status: " + statusCode + " " + reason);
+    WScript.StdOut.WriteLine("Content-Type: application/json; charset=utf-8");
+    WScript.StdOut.WriteLine("");
+    WScript.StdOut.WriteLine(JSON.stringify(payload));
+    WScript.Quit(0);
+}
+
+try {
+    var method = WScript.CreateObject("WScript.Shell").Environment("Process")("REQUEST_METHOD") || "";
+    if (method !== "POST") {
+        writeResponse(405, "Method Not Allowed", { ok: false, error: "Uzyj metody POST." });
+    }
+
+    var body = "";
+    while (!WScript.StdIn.AtEndOfStream) {
+        body += WScript.StdIn.ReadLine();
+    }
+
+    writeResponse(200, "OK", { ok: true, bodyLength: body.length });
+} catch (error) {
+    writeResponse(500, "Internal Server Error", { ok: false, error: String(error.message || error) });
+}
+]]>
+  </script>
+</job>

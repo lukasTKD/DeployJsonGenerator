@@ -404,10 +404,6 @@ body {
     color: #999;
 }
 
-.build-hidden-field {
-    display: none;
-}
-
 /* Buttons */
 .btn {
     padding: 8px 16px;
@@ -990,18 +986,6 @@ body {
     color: #999;
     font-size: 12px;
     padding: 8px 0;
-}
-
-.inline-field-status {
-    display: block;
-    margin-top: 6px;
-    font-size: 12px;
-    color: #666;
-    word-break: break-all;
-}
-
-.inline-field-status.error {
-    color: #c62828;
 }
 
 .interflow-info {

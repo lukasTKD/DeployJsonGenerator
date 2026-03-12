@@ -13,23 +13,14 @@ const App = (() => {
 
     const SQL_RUNNER_BUILD_ID = 'TC_SQL';
     const SCRIPT_RUNNER_BUILD_ID = 'TC_PowerShell';
-    const RUNONLY_BUILD_ID = 'TC_RunOnly';
     const FERRYT_RENEW_PLACEHOLDER = 'Renew';
     const FERRYT_RENEW_BUILD_ID = 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment';
 
     const FERRYT_DEFAULTS = {
         runat: '21:00',
         email: 'hardcore@mbank.pl',
-        blackout: '"1680|Ferryt","1696|BPM Service"'
+        blackout: '"1680|Ferryt","1696|BPM ServicePoint"'
     };
-
-    const AUTO_SAVE_ROOT = 'D:\\PROD_REPO_DATA\\AutomateDeploy\\Deploys';
-    const ENABLE_ACTIVITY_LOG = false;
-    const APP_BASE_URL = (() => {
-        const scriptTag = document.currentScript || document.querySelector('script[src$="app.js"]');
-        const source = scriptTag && scriptTag.src ? scriptTag.src : window.location.href;
-        return new URL('./', source).href;
-    })();
 
     const FERRYT_BUILD_CATALOG = [
         {
@@ -122,7 +113,6 @@ const App = (() => {
         flows: {},
         flowOrder: [],
         nodeCounter: 0,
-        exportDate: '',
         editingNodeId: null,
         pendingNewNodeId: null,
         dragging: null,
@@ -131,60 +121,6 @@ const App = (() => {
 
     let currentUsername = '';
     let editingFerrytType = '';
-    let loggingDisabled = false;
-
-    function buildAppUrl(path) {
-        return new URL(path, APP_BASE_URL).toString();
-    }
-
-    function getTodayIsoDate() {
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
-    function sanitizeWindowsFileName(value) {
-        return (value || '')
-            .trim()
-            .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
-    }
-
-    function syncFerrytFilename(flow) {
-        if (!flow || !isFerrytServer(flow.server)) return;
-        flow.filename = `Ferryt_${sanitizeWindowsFileName(flow.change || '')}`;
-    }
-
-    function stringifyLogDetails(details) {
-        if (details === null || details === undefined) return '';
-        if (typeof details === 'string') return details.slice(0, 500);
-
-        try {
-            return JSON.stringify(details).slice(0, 500);
-        } catch (error) {
-            return String(details).slice(0, 500);
-        }
-    }
-
-    function logEvent(eventType, details = '') {
-        if (!ENABLE_ACTIVITY_LOG) return;
-        if (loggingDisabled) return;
-        try {
-            const url = buildAppUrl(`activity-log.aspx?server=${encodeURIComponent(state.currentServer || '')}` +
-                `&event=${encodeURIComponent(eventType || 'UNKNOWN')}` +
-                `&data=${encodeURIComponent(stringifyLogDetails(details))}`);
-            fetch(url, { cache: 'no-store' }).then(response => {
-                if (!response.ok) {
-                    loggingDisabled = true;
-                }
-            }).catch(() => {
-                loggingDisabled = true;
-            });
-        } catch (error) {
-            // Ignore logging failures so they never affect the UI flow.
-        }
-    }
 
     function getStorageKey() {
         return currentUsername
@@ -217,7 +153,9 @@ const App = (() => {
         flow.runat = flow.runat || FERRYT_DEFAULTS.runat;
         flow.email = flow.email || FERRYT_DEFAULTS.email;
         flow.blackout = flow.blackout || FERRYT_DEFAULTS.blackout;
-        syncFerrytFilename(flow);
+        if (!flow.filename || !flow.filename.trim()) {
+            flow.filename = 'ferryt_deploy_' + ((state.flowOrder.indexOf(flow.id) + 1) || 1);
+        }
     }
 
     function normalizeFerrytNode(node) {
@@ -303,7 +241,7 @@ const App = (() => {
         const ferryt = isFerrytServer();
         state.flows[id] = {
             id,
-            filename: ferryt ? 'Ferryt_' : 'deploy_' + (state.flowOrder.length + 1),
+            filename: ferryt ? 'ferryt_deploy_' + (state.flowOrder.length + 1) : 'deploy_' + (state.flowOrder.length + 1),
             server: state.currentServer,
             enabled: 1,
             runat: ferryt ? FERRYT_DEFAULTS.runat : '18:00',
@@ -323,7 +261,6 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        logEvent('FLOW_ADD', { flowId: id, filename: state.flows[id].filename, server: state.currentServer });
         return id;
     }
 
@@ -343,7 +280,6 @@ const App = (() => {
             }
         });
         // Create one fresh flow
-        logEvent('FLOW_CLOSE_ALL', { server: state.currentServer, count: serverFlows.length });
         addFlow();
         showToast('Zamknięto wszystkie flow', 'success');
     }
@@ -354,7 +290,6 @@ const App = (() => {
             return;
         }
         if (!confirm('Usunąć ten flow?')) return;
-        const removedFlow = state.flows[flowId];
         delete state.flows[flowId];
         state.flowOrder = state.flowOrder.filter(id => id !== flowId);
         Object.values(state.flows).forEach(flow => {
@@ -371,11 +306,6 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        logEvent('FLOW_REMOVE', {
-            flowId,
-            filename: removedFlow ? removedFlow.filename : '',
-            server: state.currentServer
-        });
     }
 
     function switchFlow(flowId) {
@@ -383,8 +313,6 @@ const App = (() => {
         renderFlowTabs();
         renderCurrentFlow();
         updateJsonPreview();
-        const flow = state.flows[flowId];
-        logEvent('FLOW_SWITCH', { flowId, filename: flow ? flow.filename : '' });
     }
 
     function ensureCurrentServerFlow() {
@@ -412,7 +340,6 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        logEvent('SERVER_SWITCH', server);
     }
 
     function getCurrentFlow() {
@@ -434,28 +361,19 @@ const App = (() => {
         if (!flow) return;
         flow[key] = value;
         applyFerrytFlowDefaults(flow);
-        if (key === 'filename' || key === 'change') {
+        if (key === 'filename') {
             renderFlowTabs();
             renderInterflowDeps();
         }
         updateJsonPreview();
         renderAllFilesList();
-        logEvent('FLOW_SETTING_UPDATE', {
-            flowId: flow.id,
-            filename: flow.filename || '',
-            key,
-            value
-        });
     }
 
     function loadFlowSettings() {
         const flow = getCurrentFlow();
-        const filenameInput = document.getElementById('flowFilename');
         populateRunatSelect();
         if (!flow) {
-            filenameInput.value = '';
-            filenameInput.readOnly = false;
-            filenameInput.title = '';
+            document.getElementById('flowFilename').value = '';
             document.getElementById('flowRunat').value = '';
             document.getElementById('flowWaitfor').value = '';
             document.getElementById('flowEmail').value = '';
@@ -466,11 +384,7 @@ const App = (() => {
             return;
         }
         applyFerrytFlowDefaults(flow);
-        filenameInput.value = flow.filename || '';
-        filenameInput.readOnly = isFerrytServer(flow.server);
-        filenameInput.title = isFerrytServer(flow.server)
-            ? 'Dla Ferryt nazwa pliku jest budowana automatycznie z pola change.'
-            : '';
+        document.getElementById('flowFilename').value = flow.filename || '';
         document.getElementById('flowRunat').value = flow.runat || '';
         document.getElementById('flowWaitfor').value = getInterflowWaitforNames(flow).join(', ') || '';
         document.getElementById('flowEmail').value = flow.email || '';
@@ -511,14 +425,6 @@ const App = (() => {
         return buildId && buildId.toLowerCase() === SCRIPT_RUNNER_BUILD_ID.toLowerCase();
     }
 
-    function isRunOnlyType(runnerType) {
-        return runnerType === 'runonly';
-    }
-
-    function isTcRunOnly(buildId) {
-        return buildId && buildId.toLowerCase() === RUNONLY_BUILD_ID.toLowerCase();
-    }
-
     function sanitizeParams(params = {}) {
         return Object.entries(params).reduce((result, [key, value]) => {
             if (value === null || value === undefined) {
@@ -553,12 +459,6 @@ const App = (() => {
                 { key: 'servers', label: 'servers', inputId: 'nodeEditPsServers' },
                 { key: 'file', label: 'file', inputId: 'nodeEditPsFile' }
             ];
-        } else if (isRunOnlyType(node.runnerType) || isTcRunOnly(node.buildid)) {
-            fields = [
-                { key: 'inventory_path', label: 'inventory_path', inputId: 'nodeEditRunOnlyInventory' },
-                { key: 'git.envbook.repo.branch', label: 'git.envbook.repo.branch', inputId: 'nodeEditRunOnlyBranch' },
-                { key: 'playbook_path', label: 'playbook_path', inputId: 'nodeEditRunOnlyPlaybook' }
-            ];
         }
 
         if (!fields) {
@@ -584,9 +484,7 @@ const App = (() => {
             isSqlRunnerType(node.runnerType) ||
             isTcSql(node.buildid) ||
             isScriptRunnerType(node.runnerType) ||
-            isTcPowerShell(node.buildid) ||
-            isRunOnlyType(node.runnerType) ||
-            isTcRunOnly(node.buildid)
+            isTcPowerShell(node.buildid)
         ) {
             return true;
         }
@@ -607,10 +505,8 @@ const App = (() => {
     function updateTcParamsVisibility(buildId, runnerType = '') {
         const sqlSection = document.getElementById('tcSqlParams');
         const psSection = document.getElementById('tcPowerShellParams');
-        const runOnlySection = document.getElementById('tcRunOnlyParams');
         sqlSection.style.display = (isSqlRunnerType(runnerType) || isTcSql(buildId)) ? '' : 'none';
         psSection.style.display = (isScriptRunnerType(runnerType) || isTcPowerShell(buildId)) ? '' : 'none';
-        if (runOnlySection) runOnlySection.style.display = (isRunOnlyType(runnerType) || isTcRunOnly(buildId)) ? '' : 'none';
     }
 
     function loadTcParams(node) {
@@ -622,10 +518,6 @@ const App = (() => {
         // TC_PowerShell fields
         document.getElementById('nodeEditPsServers').value = params.servers || '';
         document.getElementById('nodeEditPsFile').value = params.file || '';
-        // TC_RunOnly fields
-        document.getElementById('nodeEditRunOnlyInventory').value = params.inventory_path || '';
-        document.getElementById('nodeEditRunOnlyBranch').value = params['git.envbook.repo.branch'] || '';
-        document.getElementById('nodeEditRunOnlyPlaybook').value = params.playbook_path || '';
     }
 
     function saveTcParams(node, paramsOverride = null) {
@@ -765,8 +657,8 @@ const App = (() => {
             buildid: config.buildid || '',
             enabled: config.enabled ?? 1,
             waitfor: config.waitfor || '',
-            retry: !isFerrytServer(flow.server) ? (config.retry ?? '1') : '',
-            external: !isFerrytServer(flow.server) ? (config.external || '') : '',
+            retry: config.retry ?? '1',
+            external: config.external || '',
             stop: config.stop || '',
             ferrytType: config.ferrytType || '',
             runnerType: config.runnerType || '',
@@ -783,15 +675,7 @@ const App = (() => {
     }
 
     function addNode() {
-        const nodeId = addNodeWithConfig();
-        if (!nodeId) return;
-        const flow = getCurrentFlow();
-        const node = flow && flow.nodes ? flow.nodes[nodeId] : null;
-        logEvent('NODE_ADD', {
-            nodeId,
-            name: node ? node.name : '',
-            buildid: node ? node.buildid : ''
-        });
+        addNodeWithConfig();
     }
 
     function addRunnerNode(buildId, baseName, runnerType) {
@@ -807,7 +691,6 @@ const App = (() => {
         if (nodeId) {
             state.pendingNewNodeId = nodeId;
             openNodeModal(nodeId);
-            logEvent('RUNNER_ADD', { nodeId, runnerType, buildId });
         }
     }
 
@@ -839,17 +722,11 @@ const App = (() => {
         addRunnerNode(SCRIPT_RUNNER_BUILD_ID, 'ScriptRunner', 'script');
     }
 
-    function addRunOnlyRunner() {
-        if (state.currentServer !== 'haaTeamCity') return;
-        addRunnerNode(RUNONLY_BUILD_ID, 'RunOnly', 'runonly');
-    }
-
     function deleteNode() {
         const flow = getCurrentFlow();
         if (!flow || !state.editingNodeId) return;
         const nodeId = state.editingNodeId;
         const deletedName = flow.nodes[nodeId].name;
-        const deletedBuildId = flow.nodes[nodeId].buildid || '';
         // Remove connections involving this node
         flow.connections = flow.connections.filter(
             c => c.from !== nodeId && c.to !== nodeId
@@ -863,7 +740,6 @@ const App = (() => {
         renderCanvas();
         updateJsonPreview();
         renderFerrytToolbarButtons();
-        logEvent('NODE_DELETE', { nodeId, name: deletedName, buildid: deletedBuildId });
     }
 
     // ========== CANVAS RENDERING ==========
@@ -907,6 +783,7 @@ const App = (() => {
                 <div class="node-buildid">${escapeHtml(node.buildid) || '<em style="color:#999">buildid...</em>'}</div>
                 <div class="node-status">
                     <span class="${statusClass}">${statusText}</span>
+                    ${node.waitfor ? ' | waitfor: ' + escapeHtml(node.waitfor) : ''}
                 </div>
             </div>
             <div class="connector out" title="Przeciągnij w dół aby połączyć"></div>
@@ -1136,7 +1013,6 @@ const App = (() => {
         document.getElementById('nodeEditRetry').value = node.retry || '';
         document.getElementById('nodeEditExternal').value = node.external || '';
         document.getElementById('nodeEditStop').value = node.stop || '';
-        updateNodeModalFieldVisibility(flow.server);
 
         // Show/hide TC params and load values
         updateTcParamsVisibility(node.buildid || '', node.runnerType || '');
@@ -1237,15 +1113,9 @@ const App = (() => {
         node.name = newName;
         node.buildid = newBuildId;
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
-        if (isFerrytServer(flow.server)) {
-            delete node.retry;
-            delete node.external;
-            delete node.stop;
-        } else {
-            node.retry = document.getElementById('nodeEditRetry').value.trim();
-            node.external = document.getElementById('nodeEditExternal').value.trim();
-            node.stop = document.getElementById('nodeEditStop').value.trim();
-        }
+        node.retry = document.getElementById('nodeEditRetry').value.trim();
+        node.external = document.getElementById('nodeEditExternal').value.trim();
+        node.stop = document.getElementById('nodeEditStop').value.trim();
         if (isFerrytServer()) {
             node.ferrytType = activeFerrytType;
         }
@@ -1271,14 +1141,6 @@ const App = (() => {
         }
 
         state.pendingNewNodeId = null;
-        logEvent('NODE_SAVE', {
-            nodeId: node.id,
-            oldName,
-            newName,
-            buildid: node.buildid || '',
-            ferrytType: node.ferrytType || '',
-            runnerType: node.runnerType || ''
-        });
         closeNodeModal();
         renderCanvas();
         updateJsonPreview();
@@ -1368,20 +1230,17 @@ const App = (() => {
 
         renderCanvas();
         expandCanvasIfNeeded();
-        logEvent('AUTO_LAYOUT', { flowId: flow.id, nodeCount: nodes.length });
     }
 
     function clearCanvas() {
         const flow = getCurrentFlow();
         if (!flow) return;
         if (!confirm('Wyczyścić wszystkie buildy z tego flow?')) return;
-        const clearedNodeCount = Object.keys(flow.nodes).length;
         flow.nodes = {};
         flow.connections = [];
         renderCanvas();
         updateJsonPreview();
         renderFerrytToolbarButtons();
-        logEvent('CANVAS_CLEAR', { flowId: flow.id, nodeCount: clearedNodeCount });
     }
 
     // ========== JSON GENERATION ==========
@@ -1417,9 +1276,9 @@ const App = (() => {
             if (node.waitfor) build.waitfor = node.waitfor;
             build.enabled = node.enabled;
             build.buildid = node.buildid || 'NAZWA_BUILDA';
-            if (!isFerrytServer(flow.server) && node.retry) build.retry = node.retry;
-            if (!isFerrytServer(flow.server) && node.external) build.external = node.external;
-            if (!isFerrytServer(flow.server) && node.stop) build.stop = node.stop;
+            if (node.retry) build.retry = node.retry;
+            if (node.external) build.external = node.external;
+            if (node.stop) build.stop = node.stop;
             // TC params
             const sanitizedParams = sanitizeParams(node.params || {});
             if (Object.keys(sanitizedParams).length > 0) {
@@ -1602,7 +1461,7 @@ const App = (() => {
                 <div class="file-item">
                     <span class="file-name">${escapeHtml(flow.filename)}.json</span>
                     <span class="file-builds">${buildCount} build${buildCount !== 1 ? 'ów' : ''}</span>
-                    <button class="btn btn-secondary btn-sm" onclick="App.saveFlowJsonToDeploy('${flow.id}')">Zapisz</button>
+                    <button class="btn btn-secondary btn-sm" onclick="App.downloadFlowJson('${flow.id}')">Pobierz</button>
                 </div>
             `;
         }).join('');
@@ -1612,125 +1471,17 @@ const App = (() => {
         document.getElementById('flowCount').textContent = `Flows: ${getServerFlows().length}`;
     }
 
-    // ========== SAVE / DOWNLOAD ==========
-
-    async function parseSaveResponse(response) {
-        const raw = await response.text();
-        if (!raw) {
-            return { ok: response.ok };
-        }
-
-        try {
-            return JSON.parse(raw);
-        } catch (error) {
-            throw new Error(`Serwer zwrocil niepoprawna odpowiedz (${response.status}).`);
-        }
-    }
-
-    async function postDeploySaveRequest(payload) {
-        const response = await fetch(buildAppUrl('save-deploys.aspx'), {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
-            },
-            credentials: 'same-origin',
-            body: new URLSearchParams({
-                payload: JSON.stringify(payload)
-            }).toString()
-        });
-
-        const data = await parseSaveResponse(response);
-        return { ok: response.ok, status: response.status, data };
-    }
-
-    async function saveFilesToDeploy(files, successMessage, logType, logDetails = {}) {
-        if (!files || files.length === 0) {
-            showToast('Brak plików do zapisania', 'error');
-            return false;
-        }
-
-        const exportDate = state.exportDate || getTodayIsoDate();
-        try {
-            const result = await postDeploySaveRequest({
-                exportDate,
-                server: state.currentServer,
-                files
-            });
-            const data = result.data || {};
-            if (!result.ok || !data.ok) {
-                throw new Error(data.error || `Blad zapisu (${result.status})`);
-            }
-            showToast(successMessage || 'Plik zapisany', 'success');
-            logEvent(logType, {
-                ...logDetails,
-                exportDate,
-                directory: data.directory || `${AUTO_SAVE_ROOT}\\${exportDate}`,
-                count: data.saved || files.length
-            });
-            return true;
-        } catch (error) {
-            showToast(`Zapis nieudany: ${error && error.message ? error.message : 'Brak połączenia z endpointem zapisu.'}`, 'error');
-            return false;
-        }
-    }
-
-    function getFlowDeployFile(flow) {
-        if (!flow) return null;
-        applyFerrytFlowDefaults(flow);
-        const safeName = sanitizeWindowsFileName(flow.filename || 'deploy') || 'deploy';
-        return {
-            filename: `${safeName}.json`,
-            content: formatJson(generateJson(flow))
-        };
-    }
-
-    async function saveCurrentJsonToDeploy() {
-        const flow = getCurrentFlow();
-        if (!flow) return;
-        await saveFilesToDeploy(
-            [getFlowDeployFile(flow)],
-            `Zapisano ${flow.filename}.json do katalogu Deploy`,
-            'JSON_SAVE_CURRENT',
-            { flowId: flow.id, filename: flow.filename || '' }
-        );
-    }
-
-    async function saveFlowJsonToDeploy(flowId) {
-        const flow = state.flows[flowId];
-        if (!flow) return;
-        await saveFilesToDeploy(
-            [getFlowDeployFile(flow)],
-            `Zapisano ${flow.filename}.json do katalogu Deploy`,
-            'JSON_SAVE_FLOW',
-            { flowId, filename: flow.filename || '' }
-        );
-    }
-
-    async function saveAllJsonToDeploy() {
-        const serverFlows = getServerFlows();
-        if (serverFlows.length === 0) {
-            showToast('Brak flows do zapisania', 'error');
-            return;
-        }
-        await saveFilesToDeploy(
-            collectDeployFiles(serverFlows),
-            `Zapisano ${serverFlows.length} plik(ów) do katalogu Deploy`,
-            'JSON_SAVE_ALL',
-            { server: state.currentServer, flowCount: serverFlows.length }
-        );
-    }
+    // ========== DOWNLOAD ==========
 
     function downloadCurrentJson() {
         const flow = getCurrentFlow();
         if (!flow) return;
-        logEvent('JSON_DOWNLOAD_CURRENT', { flowId: flow.id, filename: flow.filename || '' });
         downloadJsonFile(flow.filename + '.json', generateJson(flow));
     }
 
     function downloadFlowJson(flowId) {
         const flow = state.flows[flowId];
         if (!flow) return;
-        logEvent('JSON_DOWNLOAD_FLOW', { flowId, filename: flow.filename || '' });
         downloadJsonFile(flow.filename + '.json', generateJson(flow));
     }
 
@@ -1744,16 +1495,14 @@ const App = (() => {
             downloadJsonFile(flow.filename + '.json', generateJson(flow));
         });
         showToast(`Pobrano ${serverFlows.length} plik(ów) JSON`, 'success');
-        logEvent('JSON_DOWNLOAD_ALL', { server: state.currentServer, flowCount: serverFlows.length });
     }
 
     function downloadJsonFile(filename, jsonObj) {
-        const baseName = sanitizeWindowsFileName((filename || '').replace(/\.json$/i, '')) || 'deploy';
         const blob = new Blob([formatJson(jsonObj)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${baseName}.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -1763,7 +1512,6 @@ const App = (() => {
     function copyJson() {
         const flow = getCurrentFlow();
         if (!flow) return;
-        logEvent('JSON_COPY', { flowId: flow.id, filename: flow.filename || '' });
         navigator.clipboard.writeText(formatJson(generateJson(flow))).then(() => {
             showToast('JSON skopiowany do schowka', 'success');
         }).catch(() => {
@@ -1815,33 +1563,6 @@ const App = (() => {
         setTimeout(() => toast.remove(), 3000);
     }
 
-    function updateAutoSaveStatus(message, isError = false, title = '') {
-        const status = document.getElementById('autoSaveStatus');
-        if (!status) return;
-        status.textContent = message;
-        status.title = title || message;
-        status.classList.toggle('error', isError);
-    }
-
-    function updateExportDate(value) {
-        state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : getTodayIsoDate();
-        const input = document.getElementById('deployFolderDate');
-        if (input) input.value = state.exportDate;
-        const targetDir = `${AUTO_SAVE_ROOT}\\${state.exportDate}`;
-        updateAutoSaveStatus(`Zapis do: ${targetDir}`, false, targetDir);
-    }
-
-    function collectDeployFiles(serverFlows) {
-        return serverFlows.map(flow => {
-            applyFerrytFlowDefaults(flow);
-            const safeName = sanitizeWindowsFileName(flow.filename || 'deploy') || 'deploy';
-            return {
-                filename: `${safeName}.json`,
-                content: formatJson(generateJson(flow))
-            };
-        });
-    }
-
     // ========== SAVE/LOAD STATE (localStorage) ==========
 
     function saveState() {
@@ -1851,8 +1572,7 @@ const App = (() => {
                 currentFlowId: state.currentFlowId,
                 flows: state.flows,
                 flowOrder: state.flowOrder,
-                nodeCounter: state.nodeCounter,
-                exportDate: state.exportDate || getTodayIsoDate()
+                nodeCounter: state.nodeCounter
             }));
         } catch (e) { /* ignore */ }
     }
@@ -1876,7 +1596,6 @@ const App = (() => {
                 state.flowOrder = sanitizedFlowOrder;
                 state.currentFlowId = sanitizedFlows[data.currentFlowId] ? data.currentFlowId : sanitizedFlowOrder[0] || null;
                 state.nodeCounter = data.nodeCounter || 0;
-                state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(data.exportDate || '') ? data.exportDate : getTodayIsoDate();
 
                 Object.values(state.flows).forEach(flow => {
                     if (Array.isArray(flow.interflowWaitfor)) {
@@ -1894,19 +1613,13 @@ const App = (() => {
                     delete flow.waitfor;
                     applyFerrytFlowDefaults(flow);
                     if (isFerrytServer(flow.server)) {
-                        Object.values(flow.nodes || {}).forEach(node => {
-                            delete node.retry;
-                            delete node.external;
-                            delete node.stop;
-                            normalizeFerrytNode(node);
-                        });
+                        Object.values(flow.nodes || {}).forEach(normalizeFerrytNode);
                     }
                 });
 
                 return true;
             }
         } catch (e) { /* ignore */ }
-        state.exportDate = getTodayIsoDate();
         return false;
     }
 
@@ -2000,8 +1713,8 @@ const App = (() => {
                 buildid: lines[i], // original name as buildid
                 enabled: 1,
                 waitfor: '',
-                retry: !isFerrytServer(flow.server) ? '1' : '',
-                external: !isFerrytServer(flow.server) ? '' : '',
+                retry: '1',
+                external: '',
                 x: Math.max(30, (canvasW - nodeW) / 2),
                 y: 30 + (existingCount + i) * 110
             };
@@ -2013,11 +1726,6 @@ const App = (() => {
         expandCanvasIfNeeded();
         closeBulkDrawer();
         showToast(`Dodano ${addedNames.length} buildów do flow`, 'success');
-        logEvent('BULK_ADD_BUILDS', {
-            flowId: flow.id,
-            count: addedNames.length,
-            builds: addedNames.join(',')
-        });
     }
 
     function updateServerSpecificUI() {
@@ -2026,28 +1734,13 @@ const App = (() => {
         const genericAddBtn = document.getElementById('btnAddNodeGeneric');
         const sqlRunnerBtn = document.getElementById('btnAddSqlRunner');
         const scriptRunnerBtn = document.getElementById('btnAddScriptRunner');
-        const runOnlyBtn = document.getElementById('btnAddRunOnlyRunner');
         const validateFerrytBtn = document.getElementById('btnValidateFerryt');
         const ferrytToolbar = document.getElementById('ferrytToolbarActions');
         if (genericAddBtn) genericAddBtn.style.display = ferryt ? 'none' : '';
         if (sqlRunnerBtn) sqlRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
         if (scriptRunnerBtn) scriptRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
-        if (runOnlyBtn) runOnlyBtn.style.display = isHaaTeamCity ? '' : 'none';
         if (validateFerrytBtn) validateFerrytBtn.style.display = ferryt ? '' : 'none';
         if (ferrytToolbar) ferrytToolbar.style.display = ferryt ? 'flex' : 'none';
-    }
-
-    function updateNodeModalFieldVisibility(server = state.currentServer) {
-        const waitforGroup = document.getElementById('nodeEditWaitforGroup');
-        const retryGroup = document.getElementById('nodeEditRetryGroup');
-        const externalGroup = document.getElementById('nodeEditExternalGroup');
-        const stopGroup = document.getElementById('nodeEditStopGroup');
-        const ferryt = isFerrytServer(server);
-
-        if (waitforGroup) waitforGroup.style.display = 'none';
-        if (retryGroup) retryGroup.style.display = ferryt ? 'none' : 'flex';
-        if (externalGroup) externalGroup.style.display = ferryt ? 'none' : 'flex';
-        if (stopGroup) stopGroup.style.display = ferryt ? 'none' : 'flex';
     }
 
     function getFerrytParamsFromInputs(item, getInput) {
@@ -2115,7 +1808,6 @@ const App = (() => {
             state.pendingNewNodeId = nodeId;
         }
         openNodeModal(nodeId);
-        logEvent('FERRYT_BUILD_ADD', { nodeId, buildType: item.buildType, buildId: item.buildId || '' });
     }
 
     function collectFerrytValidationPayload(flow) {
@@ -2224,14 +1916,9 @@ const App = (() => {
             return;
         }
 
-        logEvent('FERRYT_VALIDATE_START', {
-            flowId: flow.id,
-            filename: flow.filename || '',
-            packageCount: validation.packages.length
-        });
         setFerrytValidationBusy(true);
         try {
-            const response = await fetch(buildAppUrl('validate-artifactory.aspx'), {
+            const response = await fetch('validate-artifactory.aspx', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -2247,37 +1934,17 @@ const App = (() => {
             renderValidationResult(data, validation.skipped);
 
             if (!response.ok || data.ok === false) {
-                logEvent('FERRYT_VALIDATE_ERROR', {
-                    flowId: flow.id,
-                    filename: flow.filename || '',
-                    error: data.error || 'response_not_ok'
-                });
                 showToast(data.error || 'Walidacja Artifactory zakończona błędem', 'error');
                 return;
             }
 
             if (Array.isArray(data.missing) && data.missing.length > 0) {
-                logEvent('FERRYT_VALIDATE_MISSING', {
-                    flowId: flow.id,
-                    filename: flow.filename || '',
-                    missingCount: data.missing.length
-                });
                 showToast(`Brakuje ${data.missing.length} paczek w Artifactory`, 'error');
                 return;
             }
 
-            logEvent('FERRYT_VALIDATE_OK', {
-                flowId: flow.id,
-                filename: flow.filename || '',
-                packageCount: validation.packages.length
-            });
             showToast('Wszystkie paczki są dostępne w Artifactory', 'success');
         } catch (error) {
-            logEvent('FERRYT_VALIDATE_ERROR', {
-                flowId: flow.id,
-                filename: flow.filename || '',
-                error: error.message || 'request_failed'
-            });
             renderValidationResult({ ok: false, error: error.message || 'Nie udało się wykonać walidacji.' }, validation.skipped);
             showToast(error.message || 'Nie udało się połączyć z walidacją Artifactory', 'error');
         } finally {
@@ -2324,7 +1991,6 @@ const App = (() => {
             populateExternaRunat();
             updateExternaBuildCount();
         }
-        logEvent('MODE_SWITCH', mode);
     }
 
     function populateExternaRunat() {
@@ -2390,11 +2056,6 @@ const App = (() => {
         const preview = document.getElementById('externaJsonPreview');
         preview.innerHTML = syntaxHighlight(formatJson(json));
         showToast(`Wygenerowano JSON z ${lines.length} buildami`, 'success');
-        logEvent('EXTERNA_GENERATE', {
-            server: serverKey,
-            count: lines.length,
-            waitfor
-        });
     }
 
     function copyExternaJson() {
@@ -2402,9 +2063,6 @@ const App = (() => {
             showToast('Najpierw wygeneruj JSON', 'error');
             return;
         }
-        logEvent('EXTERNA_COPY', {
-            filename: document.getElementById('externaFilename').value.trim() || 'externa_deploy'
-        });
         navigator.clipboard.writeText(formatJson(externaJson)).then(() => {
             showToast('JSON skopiowany do schowka', 'success');
         }).catch(() => {
@@ -2418,7 +2076,6 @@ const App = (() => {
             return;
         }
         const filename = (document.getElementById('externaFilename').value.trim() || 'externa_deploy') + '.json';
-        logEvent('EXTERNA_DOWNLOAD', { filename });
         downloadJsonFile(filename, externaJson);
     }
 
@@ -2437,12 +2094,13 @@ const App = (() => {
 
     async function fetchUsername() {
         try {
-            const resp = await fetch(buildAppUrl('whoami.aspx'));
+            const resp = await fetch('whoami.aspx');
             if (resp.ok) {
                 const data = await resp.json();
                 currentUsername = data.username || '';
             }
         } catch (e) {
+            // Fallback: no per-user isolation
             currentUsername = '';
         }
     }
@@ -2450,17 +2108,10 @@ const App = (() => {
     async function init() {
         await fetchUsername();
         const loaded = loadState();
-        if (!state.exportDate) {
-            state.exportDate = getTodayIsoDate();
-        }
         if (!loaded) {
             addFlow();
         } else {
             switchServer(state.currentServer);
-        }
-        const exportDateInput = document.getElementById('deployFolderDate');
-        if (exportDateInput) {
-            exportDateInput.value = state.exportDate;
         }
         populateRunatSelect();
         updateServerSpecificUI();
@@ -2470,7 +2121,6 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        updateAutoSaveStatus(`Zapis do: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
         // Live build count for externa
@@ -2478,7 +2128,6 @@ const App = (() => {
         if (extTextarea) {
             extTextarea.addEventListener('input', updateExternaBuildCount);
         }
-        logEvent('PAGE_LOAD', { loadedFromStorage: loaded, user: currentUsername || '' });
     }
 
     // ========== PUBLIC API ==========
@@ -2490,7 +2139,6 @@ const App = (() => {
         switchFlow,
         switchServer,
         updateFlowSetting: withSave(updateFlowSetting),
-        updateExportDate: withSave(updateExportDate),
         addNode: withSave(addNode),
         deleteNode: withSave(deleteNode),
         openNodeModal,
@@ -2499,9 +2147,6 @@ const App = (() => {
         autoLayout: withSave(autoLayout),
         clearCanvas: withSave(clearCanvas),
         copyJson,
-        saveCurrentJsonToDeploy,
-        saveFlowJsonToDeploy,
-        saveAllJsonToDeploy,
         downloadCurrentJson,
         downloadFlowJson,
         downloadAllJson,
@@ -2518,8 +2163,7 @@ const App = (() => {
         validateFerrytPackages,
         closeValidationResult,
         addSqlRunner: withSave(addSqlRunner),
-        addScriptRunner: withSave(addScriptRunner),
-        addRunOnlyRunner: withSave(addRunOnlyRunner)
+        addScriptRunner: withSave(addScriptRunner)
     };
 })();
 

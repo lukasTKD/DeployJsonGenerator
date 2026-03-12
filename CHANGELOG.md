@@ -11,8 +11,6 @@ Wszystkie istotne zmiany w projekcie sa zapisywane tutaj.
 - wsparcie dla wariantu sciezki `buildConfiguradion` przy ekstrakcji `buildid`
 - README jako glowna dokumentacja dla uzytkownika i developera
 - ten plik `CHANGELOG.md`
-- logowanie aktywnosci uzytkownikow do `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\userActivity.log`
-- endpoint `activity-log.aspx` do zapisu zdarzen uzytkownika
 
 ### Changed
 
@@ -20,7 +18,6 @@ Wszystkie istotne zmiany w projekcie sa zapisywane tutaj.
 - placeholdery i opisy UI informuja o mozliwosci wklejania pelnych linkow TeamCity
 - odpowiedzi bledow walidacji Artifactory sa lepiej propagowane do klienta
 - integracja Artifactory korzysta z `artifactoryUser` jako tytulu wpisu KeePass, gdy jest dostepny
-- frontend zapisuje najwazniejsze akcje uzytkownika do logu serwerowego
 
 ### Fixed
 
