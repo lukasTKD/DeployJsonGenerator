@@ -131,9 +131,6 @@ const App = (() => {
 
     let currentUsername = '';
     let editingFerrytType = '';
-    let autoSaveTimer = null;
-    let lastAutoSaveSignature = '';
-    let autoSaveRequestSeq = 0;
     let loggingDisabled = false;
 
     function buildAppUrl(path) {
@@ -415,7 +412,6 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        scheduleAutoSave();
         logEvent('SERVER_SWITCH', server);
     }
 
@@ -1629,27 +1625,16 @@ const App = (() => {
         updateAutoSaveStatus(`Zapisywanie do: ${targetDir}`, false, targetDir);
 
         try {
-            const response = await fetch(buildAppUrl('save-deploys.aspx'), {
-                method: 'POST',
-                body: new URLSearchParams({
-                    payload: JSON.stringify({
-                        exportDate,
-                        server: state.currentServer,
-                        files
-                    })
-                })
-            });
-            const data = await parseAutoSaveResponse(response);
-            if (!response.ok || !data.ok) {
-                throw new Error(data.error || `Blad zapisu (${response.status})`);
-            }
-
-            lastAutoSaveSignature = JSON.stringify({
+            const result = await postDeploySaveRequest({
                 exportDate,
                 server: state.currentServer,
-                files: collectAutoSaveFiles(getServerFlows())
+                files
             });
-            updateAutoSaveStatus(`Folder: ${data.directory || targetDir}`, false, data.directory || targetDir);
+            const data = result.data || {};
+            if (!result.ok || !data.ok) {
+                throw new Error(data.error || `Blad zapisu (${result.status})`);
+            }
+            updateAutoSaveStatus(`Zapisano do: ${data.directory || targetDir}`, false, data.directory || targetDir);
             showToast(successMessage || 'Plik zapisany', 'success');
             logEvent(logType, {
                 ...logDetails,
@@ -1660,7 +1645,7 @@ const App = (() => {
             return true;
         } catch (error) {
             updateAutoSaveStatus(`Błąd zapisu do: ${targetDir}`, true, targetDir);
-            showToast(`Zapis nieudany: ${error.message}`, 'error');
+            showToast(`Zapis nieudany: ${error && error.message ? error.message : 'Brak połączenia z endpointem zapisu.'}`, 'error');
             return false;
         }
     }
@@ -1818,10 +1803,8 @@ const App = (() => {
         state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : getTodayIsoDate();
         const input = document.getElementById('deployFolderDate');
         if (input) input.value = state.exportDate;
-        lastAutoSaveSignature = '';
         const targetDir = `${AUTO_SAVE_ROOT}\\${state.exportDate}`;
-        updateAutoSaveStatus(`Folder: ${targetDir}`, false, targetDir);
-        scheduleAutoSave(true);
+        updateAutoSaveStatus(`Wybrany folder: ${targetDir}`, false, targetDir);
     }
 
     function collectAutoSaveFiles(serverFlows) {
@@ -1848,56 +1831,48 @@ const App = (() => {
         }
     }
 
-    function scheduleAutoSave(force = false) {
-        clearTimeout(autoSaveTimer);
-        autoSaveTimer = setTimeout(() => {
-            executeAutoSave(force);
-        }, 400);
+    function postDeploySaveRequestXhr(url, body, originalError = null) {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8');
+            xhr.onreadystatechange = () => {
+                if (xhr.readyState !== 4) return;
+
+                const responseLike = {
+                    ok: xhr.status >= 200 && xhr.status < 300,
+                    status: xhr.status,
+                    text: async () => xhr.responseText || ''
+                };
+
+                parseAutoSaveResponse(responseLike)
+                    .then(data => resolve({ ok: responseLike.ok, status: xhr.status, data }))
+                    .catch(error => reject(originalError || error));
+            };
+            xhr.onerror = () => reject(originalError || new Error('Błąd połączenia z endpointem zapisu.'));
+            xhr.send(body);
+        });
     }
 
-    async function executeAutoSave(force = false) {
-        const serverFlows = getServerFlows();
-        if (serverFlows.length === 0) {
-            updateAutoSaveStatus('Brak flow do zapisu');
-            return;
-        }
-
-        const exportDate = state.exportDate || getTodayIsoDate();
-        const files = collectAutoSaveFiles(serverFlows);
-        const targetDir = `${AUTO_SAVE_ROOT}\\${exportDate}`;
-        const payload = {
-            exportDate,
-            server: state.currentServer,
-            files
-        };
-        const signature = JSON.stringify(payload);
-        if (!force && signature === lastAutoSaveSignature) {
-            updateAutoSaveStatus(`Folder: ${targetDir}`, false, targetDir);
-            return;
-        }
-
-        const requestSeq = ++autoSaveRequestSeq;
-        updateAutoSaveStatus(`Zapisywanie do: ${targetDir}`, false, targetDir);
+    async function postDeploySaveRequest(payload) {
+        const url = buildAppUrl('save-deploys.aspx');
+        const body = new URLSearchParams({
+            payload: JSON.stringify(payload)
+        }).toString();
 
         try {
-            const response = await fetch(buildAppUrl('save-deploys.aspx'), {
+            const response = await fetch(url, {
                 method: 'POST',
-                body: new URLSearchParams({
-                    payload: JSON.stringify(payload)
-                })
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                credentials: 'same-origin',
+                body
             });
             const data = await parseAutoSaveResponse(response);
-            if (!response.ok || !data.ok) {
-                throw new Error(data.error || `Blad zapisu (${response.status})`);
-            }
-            if (requestSeq !== autoSaveRequestSeq) return;
-
-            lastAutoSaveSignature = signature;
-            updateAutoSaveStatus(`Folder: ${data.directory || targetDir}`, false, data.directory || targetDir);
+            return { ok: response.ok, status: response.status, data };
         } catch (error) {
-            if (requestSeq !== autoSaveRequestSeq) return;
-            updateAutoSaveStatus(`Błąd zapisu do: ${targetDir}`, true, targetDir);
-            showToast(`Autozapis nieudany: ${error.message}`, 'error');
+            return postDeploySaveRequestXhr(url, body, error);
         }
     }
 
@@ -1973,7 +1948,6 @@ const App = (() => {
         return function(...args) {
             const result = fn.apply(this, args);
             saveState();
-            scheduleAutoSave();
             return result;
         };
     }
@@ -2531,10 +2505,9 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        updateAutoSaveStatus(`Folder: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
+        updateAutoSaveStatus(`Wybrany folder: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
-        scheduleAutoSave(true);
         // Live build count for externa
         const extTextarea = document.getElementById('externaBuildList');
         if (extTextarea) {
