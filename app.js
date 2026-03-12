@@ -24,6 +24,7 @@ const App = (() => {
     };
 
     const AUTO_SAVE_ROOT = 'D:\\PROD_REPO_DATA\\AutomateDeploy\\Deploys';
+    const ENABLE_ACTIVITY_LOG = false;
     const APP_BASE_URL = (() => {
         const scriptTag = document.currentScript || document.querySelector('script[src$="app.js"]');
         const source = scriptTag && scriptTag.src ? scriptTag.src : window.location.href;
@@ -170,6 +171,7 @@ const App = (() => {
     }
 
     function logEvent(eventType, details = '') {
+        if (!ENABLE_ACTIVITY_LOG) return;
         if (loggingDisabled) return;
         try {
             const url = buildAppUrl(`activity-log.aspx?server=${encodeURIComponent(state.currentServer || '')}` +
