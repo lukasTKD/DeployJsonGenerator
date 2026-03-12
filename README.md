@@ -108,12 +108,13 @@ Node zawiera m.in.:
 - `buildid`
 - `enabled`
 - `waitfor`
+- `retry` i `external` dla `haaTeamCity` i `teamcity`
 - `stop`
 - `runnerType`
 - `ferrytType`
 - `params`
 
-Zaleznosci miedzy buildami ustawia sie przez przeciagniecie polaczenia z jednego node'a na drugi. Node docelowy otrzymuje `waitfor` wskazujacy nazwe poprzedniego builda, ale samo pole `waitfor` nie jest wyswietlane w edycji builda.
+Zaleznosci miedzy buildami ustawia sie przez przeciagniecie polaczenia z jednego node'a na drugi. Node docelowy otrzymuje `waitfor` wskazujacy nazwe poprzedniego builda, ale samo pole `waitfor` nie jest wyswietlane w edycji builda. Dla Ferryt ukryte sa tez `retry`, `external` i `stop`.
 
 ## 7. Szybkie buildy
 
@@ -244,7 +245,7 @@ Zasady generacji:
 - `enabled` jest brany z flow
 - `waitfor` na poziomie flow pochodzi z `interflowWaitfor`
 - `builds` sa generowane z uporzadkowanej listy node'ow
-- build nie zawiera juz pol `retry` i `external`
+- build Ferryt nie zawiera pol `retry`, `external`, `stop`
 - `params` sa dolaczane tylko, gdy po sanitizacji pozostaja niepuste
 
 Przykladowy wynik:

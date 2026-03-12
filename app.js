@@ -750,6 +750,8 @@ const App = (() => {
             buildid: config.buildid || '',
             enabled: config.enabled ?? 1,
             waitfor: config.waitfor || '',
+            retry: !isFerrytServer(flow.server) ? (config.retry ?? '1') : '',
+            external: !isFerrytServer(flow.server) ? (config.external || '') : '',
             stop: config.stop || '',
             ferrytType: config.ferrytType || '',
             runnerType: config.runnerType || '',
@@ -1116,9 +1118,10 @@ const App = (() => {
         document.getElementById('nodeEditBuildId').value = node.buildid || '';
         document.getElementById('nodeEditEnabled').value = node.enabled;
         document.getElementById('nodeEditWaitfor').value = node.waitfor || '';
-        document.getElementById('nodeEditRetry').value = '';
-        document.getElementById('nodeEditExternal').value = '';
+        document.getElementById('nodeEditRetry').value = node.retry || '';
+        document.getElementById('nodeEditExternal').value = node.external || '';
         document.getElementById('nodeEditStop').value = node.stop || '';
+        updateNodeModalFieldVisibility(flow.server);
 
         // Show/hide TC params and load values
         updateTcParamsVisibility(node.buildid || '', node.runnerType || '');
@@ -1219,9 +1222,15 @@ const App = (() => {
         node.name = newName;
         node.buildid = newBuildId;
         node.enabled = parseInt(document.getElementById('nodeEditEnabled').value);
-        delete node.retry;
-        delete node.external;
-        node.stop = document.getElementById('nodeEditStop').value.trim();
+        if (isFerrytServer(flow.server)) {
+            delete node.retry;
+            delete node.external;
+            delete node.stop;
+        } else {
+            node.retry = document.getElementById('nodeEditRetry').value.trim();
+            node.external = document.getElementById('nodeEditExternal').value.trim();
+            node.stop = document.getElementById('nodeEditStop').value.trim();
+        }
         if (isFerrytServer()) {
             node.ferrytType = activeFerrytType;
         }
@@ -1393,7 +1402,9 @@ const App = (() => {
             if (node.waitfor) build.waitfor = node.waitfor;
             build.enabled = node.enabled;
             build.buildid = node.buildid || 'NAZWA_BUILDA';
-            if (node.stop) build.stop = node.stop;
+            if (!isFerrytServer(flow.server) && node.retry) build.retry = node.retry;
+            if (!isFerrytServer(flow.server) && node.external) build.external = node.external;
+            if (!isFerrytServer(flow.server) && node.stop) build.stop = node.stop;
             // TC params
             const sanitizedParams = sanitizeParams(node.params || {});
             if (Object.keys(sanitizedParams).length > 0) {
@@ -1576,7 +1587,7 @@ const App = (() => {
                 <div class="file-item">
                     <span class="file-name">${escapeHtml(flow.filename)}.json</span>
                     <span class="file-builds">${buildCount} build${buildCount !== 1 ? 'ów' : ''}</span>
-                    <button class="btn btn-secondary btn-sm" onclick="App.downloadFlowJson('${flow.id}')">Pobierz</button>
+                    <button class="btn btn-secondary btn-sm" onclick="App.saveFlowJsonToDeploy('${flow.id}')">Zapisz</button>
                 </div>
             `;
         }).join('');
@@ -1586,7 +1597,101 @@ const App = (() => {
         document.getElementById('flowCount').textContent = `Flows: ${getServerFlows().length}`;
     }
 
-    // ========== DOWNLOAD ==========
+    // ========== SAVE / DOWNLOAD ==========
+
+    async function saveFilesToDeploy(files, successMessage, logType, logDetails = {}) {
+        if (!files || files.length === 0) {
+            showToast('Brak plików do zapisania', 'error');
+            return false;
+        }
+
+        const exportDate = state.exportDate || getTodayIsoDate();
+        const targetDir = `${AUTO_SAVE_ROOT}\\${exportDate}`;
+        updateAutoSaveStatus('Autozapis: zapisywanie...', false, targetDir);
+
+        try {
+            const response = await fetch('save-deploys.aspx', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    exportDate,
+                    server: state.currentServer,
+                    files
+                })
+            });
+            const data = await parseAutoSaveResponse(response);
+            if (!response.ok || !data.ok) {
+                throw new Error(data.error || `Blad zapisu (${response.status})`);
+            }
+
+            lastAutoSaveSignature = JSON.stringify({
+                exportDate,
+                server: state.currentServer,
+                files: collectAutoSaveFiles(getServerFlows())
+            });
+            updateAutoSaveStatus(`Autozapis: ${exportDate} (${data.saved || files.length})`, false, data.directory || targetDir);
+            showToast(successMessage || 'Plik zapisany', 'success');
+            logEvent(logType, {
+                ...logDetails,
+                exportDate,
+                directory: data.directory || targetDir,
+                count: data.saved || files.length
+            });
+            return true;
+        } catch (error) {
+            updateAutoSaveStatus('Autozapis: blad', true, targetDir);
+            showToast(`Zapis nieudany: ${error.message}`, 'error');
+            return false;
+        }
+    }
+
+    function getFlowDeployFile(flow) {
+        if (!flow) return null;
+        applyFerrytFlowDefaults(flow);
+        const safeName = sanitizeWindowsFileName(flow.filename || 'deploy') || 'deploy';
+        return {
+            filename: `${safeName}.json`,
+            content: formatJson(generateJson(flow))
+        };
+    }
+
+    async function saveCurrentJsonToDeploy() {
+        const flow = getCurrentFlow();
+        if (!flow) return;
+        await saveFilesToDeploy(
+            [getFlowDeployFile(flow)],
+            `Zapisano ${flow.filename}.json do katalogu Deploy`,
+            'JSON_SAVE_CURRENT',
+            { flowId: flow.id, filename: flow.filename || '' }
+        );
+    }
+
+    async function saveFlowJsonToDeploy(flowId) {
+        const flow = state.flows[flowId];
+        if (!flow) return;
+        await saveFilesToDeploy(
+            [getFlowDeployFile(flow)],
+            `Zapisano ${flow.filename}.json do katalogu Deploy`,
+            'JSON_SAVE_FLOW',
+            { flowId, filename: flow.filename || '' }
+        );
+    }
+
+    async function saveAllJsonToDeploy() {
+        const serverFlows = getServerFlows();
+        if (serverFlows.length === 0) {
+            showToast('Brak flows do zapisania', 'error');
+            return;
+        }
+        await saveFilesToDeploy(
+            collectAutoSaveFiles(serverFlows),
+            `Zapisano ${serverFlows.length} plik(ów) do katalogu Deploy`,
+            'JSON_SAVE_ALL',
+            { server: state.currentServer, flowCount: serverFlows.length }
+        );
+    }
 
     function downloadCurrentJson() {
         const flow = getCurrentFlow();
@@ -1834,12 +1939,8 @@ const App = (() => {
                         Object.values(flow.nodes || {}).forEach(node => {
                             delete node.retry;
                             delete node.external;
+                            delete node.stop;
                             normalizeFerrytNode(node);
-                        });
-                    } else {
-                        Object.values(flow.nodes || {}).forEach(node => {
-                            delete node.retry;
-                            delete node.external;
                         });
                     }
                 });
@@ -1942,6 +2043,8 @@ const App = (() => {
                 buildid: lines[i], // original name as buildid
                 enabled: 1,
                 waitfor: '',
+                retry: !isFerrytServer(flow.server) ? '1' : '',
+                external: !isFerrytServer(flow.server) ? '' : '',
                 x: Math.max(30, (canvasW - nodeW) / 2),
                 y: 30 + (existingCount + i) * 110
             };
@@ -1975,6 +2078,19 @@ const App = (() => {
         if (runOnlyBtn) runOnlyBtn.style.display = isHaaTeamCity ? '' : 'none';
         if (validateFerrytBtn) validateFerrytBtn.style.display = ferryt ? '' : 'none';
         if (ferrytToolbar) ferrytToolbar.style.display = ferryt ? 'flex' : 'none';
+    }
+
+    function updateNodeModalFieldVisibility(server = state.currentServer) {
+        const waitforGroup = document.getElementById('nodeEditWaitforGroup');
+        const retryGroup = document.getElementById('nodeEditRetryGroup');
+        const externalGroup = document.getElementById('nodeEditExternalGroup');
+        const stopGroup = document.getElementById('nodeEditStopGroup');
+        const ferryt = isFerrytServer(server);
+
+        if (waitforGroup) waitforGroup.style.display = 'none';
+        if (retryGroup) retryGroup.style.display = ferryt ? 'none' : 'flex';
+        if (externalGroup) externalGroup.style.display = ferryt ? 'none' : 'flex';
+        if (stopGroup) stopGroup.style.display = ferryt ? 'none' : 'flex';
     }
 
     function getFerrytParamsFromInputs(item, getInput) {
@@ -2428,6 +2544,9 @@ const App = (() => {
         autoLayout: withSave(autoLayout),
         clearCanvas: withSave(clearCanvas),
         copyJson,
+        saveCurrentJsonToDeploy,
+        saveFlowJsonToDeploy,
+        saveAllJsonToDeploy,
         downloadCurrentJson,
         downloadFlowJson,
         downloadAllJson,

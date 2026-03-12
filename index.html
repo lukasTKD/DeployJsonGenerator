@@ -153,7 +153,7 @@
                         <h3 class="section-title">Podgląd JSON</h3>
                         <div class="preview-actions">
                             <button class="btn btn-secondary btn-sm" onclick="App.copyJson()">Kopiuj</button>
-                            <button class="btn btn-primary btn-sm" onclick="App.downloadCurrentJson()">Pobierz</button>
+                            <button class="btn btn-primary btn-sm" onclick="App.saveCurrentJsonToDeploy()">Zapisz</button>
                         </div>
                     </div>
                     <pre class="json-output" id="jsonPreview">{ }</pre>
@@ -163,7 +163,7 @@
                     <div class="preview-header">
                         <h3 class="section-title">Wszystkie pliki JSON</h3>
                         <div class="preview-actions">
-                            <button class="btn btn-primary" onclick="App.downloadAllJson()">Pobierz wszystkie</button>
+                            <button class="btn btn-primary" onclick="App.saveAllJsonToDeploy()">Zapisz wszystko do Deploya</button>
                         </div>
                     </div>
                     <div class="all-files-list" id="allFilesList">
@@ -273,19 +273,19 @@
                         <option value="0">0 (Nie)</option>
                     </select>
                 </div>
-                <div class="form-group build-hidden-field">
+                <div class="form-group build-hidden-field" id="nodeEditWaitforGroup">
                     <label>waitfor (automatycznie z połączeń)</label>
                     <input type="text" id="nodeEditWaitfor" placeholder="Ustawiane przez strzałki" readonly>
                 </div>
-                <div class="form-group build-hidden-field">
+                <div class="form-group" id="nodeEditRetryGroup">
                     <label>retry</label>
                     <input type="text" id="nodeEditRetry" placeholder="Opcjonalne">
                 </div>
-                <div class="form-group build-hidden-field">
+                <div class="form-group" id="nodeEditExternalGroup">
                     <label>external</label>
                     <input type="text" id="nodeEditExternal" placeholder="Opcjonalne">
                 </div>
-                <div class="form-group">
+                <div class="form-group" id="nodeEditStopGroup">
                     <label>stop (opcjonalne)</label>
                     <input type="text" id="nodeEditStop" placeholder="Opcjonalne">
                 </div>
