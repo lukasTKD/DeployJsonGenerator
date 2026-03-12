@@ -24,6 +24,11 @@ const App = (() => {
     };
 
     const AUTO_SAVE_ROOT = 'D:\\PROD_REPO_DATA\\AutomateDeploy\\Deploys';
+    const APP_BASE_URL = (() => {
+        const scriptTag = document.currentScript || document.querySelector('script[src$="app.js"]');
+        const source = scriptTag && scriptTag.src ? scriptTag.src : window.location.href;
+        return new URL('./', source).href;
+    })();
 
     const FERRYT_BUILD_CATALOG = [
         {
@@ -128,6 +133,11 @@ const App = (() => {
     let autoSaveTimer = null;
     let lastAutoSaveSignature = '';
     let autoSaveRequestSeq = 0;
+    let loggingDisabled = false;
+
+    function buildAppUrl(path) {
+        return new URL(path, APP_BASE_URL).toString();
+    }
 
     function getTodayIsoDate() {
         const now = new Date();
@@ -160,11 +170,18 @@ const App = (() => {
     }
 
     function logEvent(eventType, details = '') {
+        if (loggingDisabled) return;
         try {
-            const url = `activity-log.aspx?server=${encodeURIComponent(state.currentServer || '')}` +
+            const url = buildAppUrl(`activity-log.aspx?server=${encodeURIComponent(state.currentServer || '')}` +
                 `&event=${encodeURIComponent(eventType || 'UNKNOWN')}` +
-                `&data=${encodeURIComponent(stringifyLogDetails(details))}`;
-            fetch(url, { cache: 'no-store' }).catch(() => {});
+                `&data=${encodeURIComponent(stringifyLogDetails(details))}`);
+            fetch(url, { cache: 'no-store' }).then(response => {
+                if (!response.ok) {
+                    loggingDisabled = true;
+                }
+            }).catch(() => {
+                loggingDisabled = true;
+            });
         } catch (error) {
             // Ignore logging failures so they never affect the UI flow.
         }
@@ -1607,18 +1624,17 @@ const App = (() => {
 
         const exportDate = state.exportDate || getTodayIsoDate();
         const targetDir = `${AUTO_SAVE_ROOT}\\${exportDate}`;
-        updateAutoSaveStatus('Autozapis: zapisywanie...', false, targetDir);
+        updateAutoSaveStatus(`Zapisywanie do: ${targetDir}`, false, targetDir);
 
         try {
-            const response = await fetch('save-deploys.aspx', {
+            const response = await fetch(buildAppUrl('save-deploys.aspx'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    exportDate,
-                    server: state.currentServer,
-                    files
+                body: new URLSearchParams({
+                    payload: JSON.stringify({
+                        exportDate,
+                        server: state.currentServer,
+                        files
+                    })
                 })
             });
             const data = await parseAutoSaveResponse(response);
@@ -1631,7 +1647,7 @@ const App = (() => {
                 server: state.currentServer,
                 files: collectAutoSaveFiles(getServerFlows())
             });
-            updateAutoSaveStatus(`Autozapis: ${exportDate} (${data.saved || files.length})`, false, data.directory || targetDir);
+            updateAutoSaveStatus(`Folder: ${data.directory || targetDir}`, false, data.directory || targetDir);
             showToast(successMessage || 'Plik zapisany', 'success');
             logEvent(logType, {
                 ...logDetails,
@@ -1641,7 +1657,7 @@ const App = (() => {
             });
             return true;
         } catch (error) {
-            updateAutoSaveStatus('Autozapis: blad', true, targetDir);
+            updateAutoSaveStatus(`Błąd zapisu do: ${targetDir}`, true, targetDir);
             showToast(`Zapis nieudany: ${error.message}`, 'error');
             return false;
         }
@@ -1802,7 +1818,7 @@ const App = (() => {
         if (input) input.value = state.exportDate;
         lastAutoSaveSignature = '';
         const targetDir = `${AUTO_SAVE_ROOT}\\${state.exportDate}`;
-        updateAutoSaveStatus(`Autozapis: ${state.exportDate}`, false, targetDir);
+        updateAutoSaveStatus(`Folder: ${targetDir}`, false, targetDir);
         scheduleAutoSave(true);
     }
 
@@ -1840,7 +1856,7 @@ const App = (() => {
     async function executeAutoSave(force = false) {
         const serverFlows = getServerFlows();
         if (serverFlows.length === 0) {
-            updateAutoSaveStatus('Autozapis: brak flow');
+            updateAutoSaveStatus('Brak flow do zapisu');
             return;
         }
 
@@ -1854,20 +1870,19 @@ const App = (() => {
         };
         const signature = JSON.stringify(payload);
         if (!force && signature === lastAutoSaveSignature) {
-            updateAutoSaveStatus(`Autozapis: ${exportDate} (${files.length})`, false, targetDir);
+            updateAutoSaveStatus(`Folder: ${targetDir}`, false, targetDir);
             return;
         }
 
         const requestSeq = ++autoSaveRequestSeq;
-        updateAutoSaveStatus('Autozapis: zapisywanie...', false, targetDir);
+        updateAutoSaveStatus(`Zapisywanie do: ${targetDir}`, false, targetDir);
 
         try {
-            const response = await fetch('save-deploys.aspx', {
+            const response = await fetch(buildAppUrl('save-deploys.aspx'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(payload)
+                body: new URLSearchParams({
+                    payload: JSON.stringify(payload)
+                })
             });
             const data = await parseAutoSaveResponse(response);
             if (!response.ok || !data.ok) {
@@ -1876,10 +1891,10 @@ const App = (() => {
             if (requestSeq !== autoSaveRequestSeq) return;
 
             lastAutoSaveSignature = signature;
-            updateAutoSaveStatus(`Autozapis: ${exportDate} (${files.length})`, false, data.directory || targetDir);
+            updateAutoSaveStatus(`Folder: ${data.directory || targetDir}`, false, data.directory || targetDir);
         } catch (error) {
             if (requestSeq !== autoSaveRequestSeq) return;
-            updateAutoSaveStatus('Autozapis: blad', true, targetDir);
+            updateAutoSaveStatus(`Błąd zapisu do: ${targetDir}`, true, targetDir);
             showToast(`Autozapis nieudany: ${error.message}`, 'error');
         }
     }
@@ -2274,7 +2289,7 @@ const App = (() => {
         });
         setFerrytValidationBusy(true);
         try {
-            const response = await fetch('validate-artifactory.aspx', {
+            const response = await fetch(buildAppUrl('validate-artifactory.aspx'), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -2480,7 +2495,7 @@ const App = (() => {
 
     async function fetchUsername() {
         try {
-            const resp = await fetch('whoami.aspx');
+            const resp = await fetch(buildAppUrl('whoami.aspx'));
             if (resp.ok) {
                 const data = await resp.json();
                 currentUsername = data.username || '';
@@ -2514,7 +2529,7 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        updateAutoSaveStatus(`Autozapis: ${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
+        updateAutoSaveStatus(`Folder: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
         scheduleAutoSave(true);

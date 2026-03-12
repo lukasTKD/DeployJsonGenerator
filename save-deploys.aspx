@@ -121,6 +121,12 @@
 
     private SaveDeploysRequest ReadPayload()
     {
+        var formPayload = (Request.Form["payload"] ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(formPayload))
+        {
+            return _serializer.Deserialize<SaveDeploysRequest>(formPayload);
+        }
+
         Request.InputStream.Position = 0;
         using (var reader = new StreamReader(Request.InputStream, Encoding.UTF8))
         {

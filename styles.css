@@ -103,47 +103,6 @@ body {
     gap: 15px;
 }
 
-.header-export {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-}
-
-.header-export label {
-    font-size: 11px;
-    font-weight: 600;
-    color: #666;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-.header-export input {
-    padding: 7px 10px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 13px;
-    color: #333;
-    background: #fff;
-}
-
-.header-export input:focus {
-    outline: none;
-    border-color: #E60000;
-    box-shadow: 0 0 0 2px rgba(230, 0, 0, 0.2);
-}
-
-.header-export-status {
-    font-size: 12px;
-    color: #666;
-    white-space: nowrap;
-}
-
-.header-export-status.error {
-    color: #c62828;
-}
-
 .header-info {
     font-size: 13px;
     color: #666;
@@ -443,6 +402,16 @@ body {
 .form-group input[readonly] {
     background: #f0f0f0;
     color: #999;
+}
+
+.inline-field-status {
+    font-size: 11px;
+    color: #666;
+    line-height: 1.3;
+}
+
+.inline-field-status.error {
+    color: #c62828;
 }
 
 .build-hidden-field {
@@ -1469,14 +1438,6 @@ body {
         flex-direction: column;
         gap: 4px;
         align-items: flex-start;
-    }
-    .header-right {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 8px;
-    }
-    .header-export {
-        justify-content: flex-start;
     }
     .bulk-drawer {
         width: 100vw;
