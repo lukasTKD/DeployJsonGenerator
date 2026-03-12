@@ -1816,13 +1816,19 @@ const App = (() => {
     }
 
     function updateAutoSaveStatus(message, isError = false, title = '') {
-        // Status under the date field was intentionally removed from UI.
+        const status = document.getElementById('autoSaveStatus');
+        if (!status) return;
+        status.textContent = message;
+        status.title = title || message;
+        status.classList.toggle('error', isError);
     }
 
     function updateExportDate(value) {
         state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : getTodayIsoDate();
         const input = document.getElementById('deployFolderDate');
         if (input) input.value = state.exportDate;
+        const targetDir = `${AUTO_SAVE_ROOT}\\${state.exportDate}`;
+        updateAutoSaveStatus(`Zapis do: ${targetDir}`, false, targetDir);
     }
 
     function collectDeployFiles(serverFlows) {
@@ -2464,6 +2470,7 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
+        updateAutoSaveStatus(`Zapis do: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
         // Live build count for externa
