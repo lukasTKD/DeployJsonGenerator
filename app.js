@@ -13,6 +13,7 @@ const App = (() => {
 
     const SQL_RUNNER_BUILD_ID = 'TC_SQL';
     const SCRIPT_RUNNER_BUILD_ID = 'TC_PowerShell';
+    const RUNONLY_BUILD_ID = 'TC_RunOnly';
     const FERRYT_RENEW_PLACEHOLDER = 'Renew';
     const FERRYT_RENEW_BUILD_ID = 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment';
 
@@ -464,6 +465,14 @@ const App = (() => {
         return buildId && buildId.toLowerCase() === SCRIPT_RUNNER_BUILD_ID.toLowerCase();
     }
 
+    function isRunOnlyType(runnerType) {
+        return runnerType === 'runonly';
+    }
+
+    function isTcRunOnly(buildId) {
+        return buildId && buildId.toLowerCase() === RUNONLY_BUILD_ID.toLowerCase();
+    }
+
     function sanitizeParams(params = {}) {
         return Object.entries(params).reduce((result, [key, value]) => {
             if (value === null || value === undefined) {
@@ -498,6 +507,12 @@ const App = (() => {
                 { key: 'servers', label: 'servers', inputId: 'nodeEditPsServers' },
                 { key: 'file', label: 'file', inputId: 'nodeEditPsFile' }
             ];
+        } else if (isRunOnlyType(node.runnerType) || isTcRunOnly(node.buildid)) {
+            fields = [
+                { key: 'inventory_path', label: 'inventory_path', inputId: 'nodeEditRunOnlyInventory' },
+                { key: 'git.envbook.repo.branch', label: 'git.envbook.repo.branch', inputId: 'nodeEditRunOnlyBranch' },
+                { key: 'playbook_path', label: 'playbook_path', inputId: 'nodeEditRunOnlyPlaybook' }
+            ];
         }
 
         if (!fields) {
@@ -523,7 +538,9 @@ const App = (() => {
             isSqlRunnerType(node.runnerType) ||
             isTcSql(node.buildid) ||
             isScriptRunnerType(node.runnerType) ||
-            isTcPowerShell(node.buildid)
+            isTcPowerShell(node.buildid) ||
+            isRunOnlyType(node.runnerType) ||
+            isTcRunOnly(node.buildid)
         ) {
             return true;
         }
@@ -544,8 +561,10 @@ const App = (() => {
     function updateTcParamsVisibility(buildId, runnerType = '') {
         const sqlSection = document.getElementById('tcSqlParams');
         const psSection = document.getElementById('tcPowerShellParams');
+        const runOnlySection = document.getElementById('tcRunOnlyParams');
         sqlSection.style.display = (isSqlRunnerType(runnerType) || isTcSql(buildId)) ? '' : 'none';
         psSection.style.display = (isScriptRunnerType(runnerType) || isTcPowerShell(buildId)) ? '' : 'none';
+        if (runOnlySection) runOnlySection.style.display = (isRunOnlyType(runnerType) || isTcRunOnly(buildId)) ? '' : 'none';
     }
 
     function loadTcParams(node) {
@@ -557,6 +576,10 @@ const App = (() => {
         // TC_PowerShell fields
         document.getElementById('nodeEditPsServers').value = params.servers || '';
         document.getElementById('nodeEditPsFile').value = params.file || '';
+        // TC_RunOnly fields
+        document.getElementById('nodeEditRunOnlyInventory').value = params.inventory_path || '';
+        document.getElementById('nodeEditRunOnlyBranch').value = params['git.envbook.repo.branch'] || '';
+        document.getElementById('nodeEditRunOnlyPlaybook').value = params.playbook_path || '';
     }
 
     function saveTcParams(node, paramsOverride = null) {
@@ -768,6 +791,11 @@ const App = (() => {
     function addScriptRunner() {
         if (state.currentServer !== 'haaTeamCity') return;
         addRunnerNode(SCRIPT_RUNNER_BUILD_ID, 'ScriptRunner', 'script');
+    }
+
+    function addRunOnlyRunner() {
+        if (state.currentServer !== 'haaTeamCity') return;
+        addRunnerNode(RUNONLY_BUILD_ID, 'RunOnly', 'runonly');
     }
 
     function deleteNode() {
@@ -1804,11 +1832,13 @@ const App = (() => {
         const genericAddBtn = document.getElementById('btnAddNodeGeneric');
         const sqlRunnerBtn = document.getElementById('btnAddSqlRunner');
         const scriptRunnerBtn = document.getElementById('btnAddScriptRunner');
+        const runOnlyBtn = document.getElementById('btnAddRunOnlyRunner');
         const validateFerrytBtn = document.getElementById('btnValidateFerryt');
         const ferrytToolbar = document.getElementById('ferrytToolbarActions');
         if (genericAddBtn) genericAddBtn.style.display = ferryt ? 'none' : '';
         if (sqlRunnerBtn) sqlRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
         if (scriptRunnerBtn) scriptRunnerBtn.style.display = isHaaTeamCity ? '' : 'none';
+        if (runOnlyBtn) runOnlyBtn.style.display = isHaaTeamCity ? '' : 'none';
         if (validateFerrytBtn) validateFerrytBtn.style.display = ferryt ? '' : 'none';
         if (ferrytToolbar) ferrytToolbar.style.display = ferryt ? 'flex' : 'none';
     }
@@ -2270,7 +2300,8 @@ const App = (() => {
         validateFerrytPackages,
         closeValidationResult,
         addSqlRunner: withSave(addSqlRunner),
-        addScriptRunner: withSave(addScriptRunner)
+        addScriptRunner: withSave(addScriptRunner),
+        addRunOnlyRunner: withSave(addRunOnlyRunner)
     };
 })();
 

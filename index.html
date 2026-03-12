@@ -111,6 +111,7 @@
                             <button class="btn btn-primary" id="btnAddNodeGeneric" onclick="App.addNode()">+ Dodaj Build</button>
                             <button class="btn btn-secondary" id="btnAddSqlRunner" onclick="App.addSqlRunner()" style="display:none">+ Dodaj SQLRunner</button>
                             <button class="btn btn-secondary" id="btnAddScriptRunner" onclick="App.addScriptRunner()" style="display:none">+ Dodaj ScriptRunner</button>
+                            <button class="btn btn-secondary" id="btnAddRunOnlyRunner" onclick="App.addRunOnlyRunner()" style="display:none">+ Dodaj RunOnly</button>
                             <div class="ferryt-toolbar-actions" id="ferrytToolbarActions" style="display:none;">
                                 <!-- Generated dynamically -->
                             </div>
@@ -311,6 +312,23 @@
                     <div class="form-group">
                         <label>file</label>
                         <input type="text" id="nodeEditPsFile" placeholder="np. deploy.ps1">
+                    </div>
+                </div>
+
+                <!-- TC_RunOnly params -->
+                <div id="tcRunOnlyParams" class="tc-params-section" style="display:none;">
+                    <div class="tc-params-header">Parametry TC_RunOnly</div>
+                    <div class="form-group">
+                        <label>inventory_path</label>
+                        <input type="text" id="nodeEditRunOnlyInventory" placeholder="np. /path/to/inventory">
+                    </div>
+                    <div class="form-group">
+                        <label>git.envbook.repo.branch</label>
+                        <input type="text" id="nodeEditRunOnlyBranch" placeholder="np. master">
+                    </div>
+                    <div class="form-group">
+                        <label>playbook_path</label>
+                        <input type="text" id="nodeEditRunOnlyPlaybook" placeholder="np. /path/to/playbook.yml">
                     </div>
                 </div>
 
