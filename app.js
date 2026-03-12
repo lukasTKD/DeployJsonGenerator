@@ -24,7 +24,7 @@ const App = (() => {
     };
 
     const AUTO_SAVE_ROOT = 'D:\\PROD_REPO_DATA\\AutomateDeploy\\Deploys';
-    const ENABLE_ACTIVITY_LOG = false;
+    const ENABLE_ACTIVITY_LOG = true;
     const APP_BASE_URL = (() => {
         const scriptTag = document.currentScript || document.querySelector('script[src$="app.js"]');
         const source = scriptTag && scriptTag.src ? scriptTag.src : window.location.href;
@@ -158,12 +158,12 @@ const App = (() => {
 
     function stringifyLogDetails(details) {
         if (details === null || details === undefined) return '';
-        if (typeof details === 'string') return details.slice(0, 500);
+        if (typeof details === 'string') return details.slice(0, 4000);
 
         try {
-            return JSON.stringify(details).slice(0, 500);
+            return JSON.stringify(details).slice(0, 4000);
         } catch (error) {
-            return String(details).slice(0, 500);
+            return String(details).slice(0, 4000);
         }
     }
 
@@ -171,10 +171,21 @@ const App = (() => {
         if (!ENABLE_ACTIVITY_LOG) return;
         if (loggingDisabled) return;
         try {
-            const url = buildAppUrl(`activity-log.aspx?server=${encodeURIComponent(state.currentServer || '')}` +
-                `&event=${encodeURIComponent(eventType || 'UNKNOWN')}` +
-                `&data=${encodeURIComponent(stringifyLogDetails(details))}`);
-            fetch(url, { cache: 'no-store' }).then(response => {
+            const payload = new URLSearchParams({
+                server: state.currentServer || '',
+                event: eventType || 'UNKNOWN',
+                data: stringifyLogDetails(details)
+            }).toString();
+
+            fetch(buildAppUrl('activity-log.aspx'), {
+                method: 'POST',
+                cache: 'no-store',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+                },
+                credentials: 'same-origin',
+                body: payload
+            }).then(response => {
                 if (!response.ok) {
                     loggingDisabled = true;
                 }
@@ -1665,7 +1676,10 @@ const App = (() => {
                 ...logDetails,
                 exportDate,
                 directory: data.directory || `${AUTO_SAVE_ROOT}\\${exportDate}`,
-                count: data.saved || files.length
+                count: data.saved || files.length,
+                files: Array.isArray(data.files) && data.files.length > 0
+                    ? data.files
+                    : files.map(file => file.filename)
             });
             return true;
         } catch (error) {

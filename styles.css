@@ -181,6 +181,45 @@ body {
     min-height: 0;
 }
 
+.access-notice {
+    width: 95%;
+    margin: 14px auto 0;
+}
+
+.access-notice-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(180deg, #fff7f7 0%, #fff 100%);
+    border: 1px solid #f0c7c7;
+    border-left: 4px solid #E60000;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.access-notice-badge {
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #E60000;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+.access-notice-content p {
+    font-size: 14px;
+    color: #444;
+    line-height: 1.4;
+}
+
+.access-notice-content strong {
+    color: #B30000;
+}
+
 /* Cards */
 .card {
     background: #ffffff;

@@ -2,6 +2,7 @@
 <%@ Import Namespace="System" %>
 <%@ Import Namespace="System.IO" %>
 <%@ Import Namespace="System.Text" %>
+<%@ Import Namespace="System.Web" %>
 
 <script runat="server">
     private static readonly object _logLock = new object();
@@ -25,9 +26,9 @@
                 user = HttpContext.Current.User.Identity.Name;
             }
 
-            var server = (Request.QueryString["server"] ?? "").Trim();
-            var eventType = (Request.QueryString["event"] ?? "UNKNOWN").Trim();
-            var eventData = (Request.QueryString["data"] ?? "").Replace(Environment.NewLine, " ").Replace("\t", " ").Trim();
+            var server = GetRequestValue("server", "").Trim();
+            var eventType = GetRequestValue("event", "UNKNOWN").Trim();
+            var eventData = GetRequestValue("data", "").Replace(Environment.NewLine, " ").Replace("\t", " ").Trim();
 
             if (!Directory.Exists(_logDir))
             {
@@ -55,5 +56,27 @@
             Response.StatusCode = 500;
             Response.Write("{\"status\":\"error\",\"message\":\"" + (ex.Message ?? "").Replace("\"", "'") + "\"}");
         }
+    }
+
+    private string GetRequestValue(string key, string fallback)
+    {
+        var value = "";
+
+        if (Request.Form != null)
+        {
+            value = Request.Form[key] ?? "";
+        }
+
+        if (string.IsNullOrWhiteSpace(value) && Request.QueryString != null)
+        {
+            value = Request.QueryString[key] ?? "";
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback ?? "";
+        }
+
+        return value;
     }
 </script>
