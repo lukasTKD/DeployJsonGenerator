@@ -986,7 +986,8 @@ body {
 .inline-field-status-compact {
     max-width: 100%;
     margin-top: 4px;
-    text-align: right;
+    align-self: stretch;
+    text-align: left;
 }
 
 .preview-actions-stack {
