@@ -978,7 +978,7 @@ body {
 .inline-field-status {
     display: block;
     margin-top: 6px;
-    font-size: 12px;
+    font-size: 10px;
     color: #666;
     white-space: nowrap;
     overflow: hidden;
