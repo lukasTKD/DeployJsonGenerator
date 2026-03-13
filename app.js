@@ -14,10 +14,12 @@ const App = (() => {
     const SQL_RUNNER_BUILD_ID = 'AutomateDeploy_SqlRunner';
     const SCRIPT_RUNNER_BUILD_ID = 'AutomateDeploy_ScriptRunner';
     const RUNONLY_BUILD_ID = 'AnsiblePlaybookRunner_ProdRunPlaybookAnsible';
-    const ALLOW_DUPLICATE_BUILD_IDS = [
-        SQL_RUNNER_BUILD_ID,
-        SCRIPT_RUNNER_BUILD_ID,
-        RUNONLY_BUILD_ID
+
+    // Edytuj te wartosci, jesli kolejne buildid maja moc wystepowac wielokrotnie w jednym JSON-ie.
+    const DUPLICATE_ALLOWED_BUILD_IDS = [
+        'AutomateDeploy_SqlRunner',
+        'AutomateDeploy_ScriptRunner',
+        'AnsiblePlaybookRunner_ProdRunPlaybookAnsible'
     ];
     const FERRYT_RENEW_PLACEHOLDER = 'Renew';
     const FERRYT_RENEW_BUILD_ID = 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment';
@@ -584,7 +586,7 @@ const App = (() => {
     }
 
     function allowsDuplicateBuildId(buildId) {
-        return ALLOW_DUPLICATE_BUILD_IDS.some(allowedId =>
+        return DUPLICATE_ALLOWED_BUILD_IDS.some(allowedId =>
             buildId && buildId.toLowerCase() === allowedId.toLowerCase()
         );
     }

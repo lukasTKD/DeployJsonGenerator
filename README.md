@@ -151,6 +151,7 @@ Ponizsze `buildid` moga pojawic sie wielokrotnie w jednym pliku JSON:
 - `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`
 
 Pozostale `buildid` sa walidowane pod katem duplikatow w ramach jednego pliku.
+Liste mozna edytowac bezposrednio w `app.js` w stalej `DUPLICATE_ALLOWED_BUILD_IDS`.
 
 ## 11. Ferryt
 
