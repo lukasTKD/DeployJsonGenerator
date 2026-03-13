@@ -2140,12 +2140,16 @@ const App = (() => {
         status.classList.toggle('error', isError);
     }
 
+    function getAutoSaveStatusLabel(exportDate) {
+        return `Zapis do: ...\\Deploys\\${exportDate}`;
+    }
+
     function updateExportDate(value) {
         state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(value || '') ? value : getTodayIsoDate();
         const input = document.getElementById('deployFolderDate');
         if (input) input.value = state.exportDate;
         const targetDir = `${AUTO_SAVE_ROOT}\\${state.exportDate}`;
-        updateAutoSaveStatus(`Zapis do: ${targetDir}`, false, targetDir);
+        updateAutoSaveStatus(getAutoSaveStatusLabel(state.exportDate), false, targetDir);
     }
 
     function collectDeployFiles(serverFlows) {
@@ -2677,7 +2681,7 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        updateAutoSaveStatus(`Zapis do: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
+        updateAutoSaveStatus(getAutoSaveStatusLabel(state.exportDate), false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
         logEvent('PAGE_LOAD', { loadedFromStorage: loaded, user: currentUsername || '' });
