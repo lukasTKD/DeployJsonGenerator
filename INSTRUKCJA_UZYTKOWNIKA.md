@@ -1,72 +1,115 @@
-# Deploy JSON Generator — instrukcja użytkownika
+# Deploy JSON Generator - instrukcja uzytkownika
 
-## 1. Do czego służy aplikacja
-Aplikacja pomaga tworzyć pliki JSON do deployów:
-- dodajesz buildy,
-- ustawiasz zależności między buildami,
-- ustawiasz zależności między plikami JSON,
-- pobierasz gotowe pliki.
+## 1. Do czego sluzy aplikacja
+Aplikacja sluzy do przygotowania i edycji plikow JSON do deployow:
+- dodawania buildow,
+- ustawiania zaleznosci miedzy buildami,
+- ustawiania zaleznosci miedzy plikami JSON,
+- zapisywania plikow bezposrednio do katalogu deploya,
+- wczytywania istniejacych plikow JSON z wybranej daty instalacji.
 
 ## 2. Podstawowy workflow
-1. Wybierz serwer TeamCity.
-2. Ustaw nazwę pliku JSON i parametry flow (np. `runat`, `enabled`).
+1. Wybierz serwer: `haaTeamCity.mbank.pl`, `TeamCity.mbank.pl` albo `Ferryt`.
+2. Ustaw `Nazwe pliku JSON`, `Date instalacji` i pozostale parametry pliku.
 3. Dodaj buildy:
-   - ręcznie przyciskiem `+ Dodaj Build`, albo
-   - przez panel `⚡ Szybkie buildy` (wklej listę buildów).
-4. Połącz node’y na diagramie, aby ustawić `waitfor`.
-5. Podejrzyj JSON po prawej stronie.
-6. Pobierz jeden plik lub wszystkie pliki JSON.
+   - recznie przyciskiem `+ Dodaj Build`,
+   - przez panel `Szybkie buildy`,
+   - albo przez przyciski runnerow dla `haaTeamCity`.
+4. Ustaw zaleznosci miedzy buildami przez polaczenia na diagramie.
+5. Ustaw zaleznosci miedzy plikami w sekcji `Zaleznosci miedzy plikami JSON`.
+6. Zapisz jeden plik albo wszystkie pliki do katalogu deploya.
 
-## 3. Szybkie dodawanie buildów
-- Kliknij pionowy przycisk `⚡ Szybkie buildy` po lewej stronie.
-- Wklej listę buildów (jeden build na linię).
+## 3. Data instalacji i katalog zapisu
+- Pole `Data instalacji` steruje katalogiem docelowym zapisu.
+- Pliki zapisywane sa do:
+  `D:\PROD_REPO_DATA\AutomateDeploy\Deploys\YYYY-MM-DD`
+- Przy zapisie aplikacja sprawdza, czy katalog dla tej daty istnieje.
+- Jesli nie istnieje, katalog jest tworzony automatycznie.
+
+## 4. Wczytywanie istniejacych JSON-ow
+- Przy `Data instalacji` uzyj przycisku `Wczytaj z daty`.
+- Aplikacja odczyta pliki JSON z katalogu dla wybranej daty i zaladuje je do edytora.
+- Wczytanie zastapi biezaca zawartosc edytora.
+- Podczas importu odtwarzane sa:
+  - buildy,
+  - `waitfor` miedzy buildami,
+  - zaleznosci miedzy plikami JSON.
+
+## 5. Szybkie buildy
+- Otworz panel `Szybkie buildy`.
+- Wklej liste buildow lub pelne linki TeamCity, po jednym wpisie na linie.
 - Kliknij `Dodaj buildy`.
 
-Ważne:
-- duplikaty na wklejonej liście są blokowane,
-- gdy nazwa builda koliduje z istniejącą nazwą node, aplikacja automatycznie doda sufiks (`_2`, `_3`...).
+Wazne:
+- duplikaty na wklejonej liscie sa blokowane,
+- konflikt nazw z istniejacymi node'ami jest rozwiazywany automatycznie przez dopisanie sufiksu,
+- dostepny jest checkbox `external = 1`, ktory ustawia `external` dla wszystkich nowo dodanych buildow.
 
-## 4. Specjalne buildy: TC_SQL i TC_PowerShell
-W oknie edycji builda wpisz w `buildid`:
-- `TC_SQL` (dowolna wielkość liter), albo
-- `TC_PowerShell` (dowolna wielkość liter).
+## 6. Specjalne buildy runnerow
+Dla `haaTeamCity` dostepne sa gotowe przyciski dodawania runnerow.
 
-Po wpisaniu pojawią się dodatkowe pola `params`.
+Aktualne `buildid`:
+- `AutomateDeploy_SqlRunner`
+- `AutomateDeploy_ScriptRunner`
+- `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`
 
-Dla `TC_SQL`:
+Po ustawieniu odpowiedniego `buildid` pojawiaja sie dodatkowe pola `params`.
+
+### 6.1 AutomateDeploy_SqlRunner
+Wymagane pola:
 - `sqlserver`
 - `database`
 - `file`
 
-Dla `TC_PowerShell`:
+### 6.2 AutomateDeploy_ScriptRunner
+Wymagane pola:
 - `servers`
 - `file`
 
-## 5. Zależności
-### 5.1 Między buildami
-- przeciągnij połączenie z jednego node’a na drugi,
-- docelowy node dostanie `waitfor` wskazujący poprzedni build.
+### 6.3 AnsiblePlaybookRunner_ProdRunPlaybookAnsible
+Dostepne pola:
+- `inventory_path`
+- `git.envbook.repo.branch`
+- `playbook_path`
 
-### 5.2 Między plikami JSON
-- użyj sekcji `Zależności między plikami JSON`,
-- zaznacz, które pliki mają być wykonane wcześniej.
+## 7. Buildy, ktore moga wystepowac wielokrotnie
+Ponisze `buildid` moga pojawic sie wielokrotnie w jednym pliku JSON:
+- `AutomateDeploy_SqlRunner`
+- `AutomateDeploy_ScriptRunner`
+- `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`
 
-## 6. Tryb External
-W zakładce `External`:
-- wklejasz listę buildów,
-- generujesz JSON z `externa: 1` dla każdego builda,
-- kopiujesz lub pobierasz wynik.
+Pozostale `buildid` sa walidowane pod katem duplikatow w ramach jednego pliku.
 
-## 7. Najczęstsze wskazówki
-- Jeśli nie widzisz dodatkowych pól TC: sprawdź, czy `buildid` jest ustawiony na `TC_SQL` lub `TC_PowerShell`.
-- Jeśli panel szybkich buildów nie jest widoczny: użyj pionowego triggera po lewej.
-- Jeśli chcesz wyczyścić flow: użyj przycisku `Wyczyść` na toolbarze diagramu.
+## 8. Zaleznosci
+### 8.1 Miedzy buildami
+- przeciagnij polaczenie z jednego node'a na drugi,
+- docelowy node dostanie `waitfor` wskazujacy poprzedni build.
 
-## 8. Favicon
-Aplikacja ma odnośnik do favicon:
+### 8.2 Miedzy plikami JSON
+- uzyj sekcji `Zaleznosci miedzy plikami JSON`,
+- zaznacz, ktore pliki maja wykonac sie wczesniej.
+
+## 9. Zapisywanie
+Masz dostepne trzy warianty zapisu:
+- `Zapisz` w podgladzie aktualnego pliku,
+- `Zapisz` przy konkretnym pliku na liscie `Wszystkie pliki JSON`,
+- `Zapisz wszystko do Deploya`.
+
+Przy zapisie logowane sa:
+- uzytkownik z IIS,
+- typ akcji,
+- data instalacji,
+- katalog docelowy,
+- lista zapisanych plikow.
+
+## 10. Dostep do aplikacji
+- Dostep do strony jest kontrolowany przez `Authorization Rules` w IIS.
+- Uzytkownik bez dostepu zobaczy osobna strone informacyjna.
+- Uprawniony uzytkownik nie widzi tego komunikatu na glownej stronie aplikacji.
+
+## 11. Favicon
+Aplikacja korzysta z:
 - `images/favicon.png`
 
-Wystarczy podmienić ten plik we własnym katalogu `images`.
-
-## 9. Zapisywanie pracy
-Stan aplikacji zapisuje się automatycznie w przeglądarce (localStorage), więc po odświeżeniu strony dane powinny wrócić.
+## 12. Zapisywanie stanu pracy
+Stan edytora zapisuje sie automatycznie w `localStorage`, dzieki czemu po odswiezeniu strony mozna przywrocic ostatnia lokalna sesje.
