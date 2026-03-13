@@ -1,69 +1,63 @@
 # Deploy JSON Generator
 
-Deploy JSON Generator to aplikacja webowa uruchamiana na IIS, która pozwala budować pliki JSON do deployu na podstawie diagramu zaleznosci miedzy buildami TeamCity. Projekt laczy dwa tryby pracy:
+Jeden kanoniczny plik dokumentacji projektu. Zawiera opis dla uzytkownika, informacje techniczne i skrocony changelog.
 
-- `Flow Editor` do budowy pelnych plikow deploy JSON
-- `External` do szybkiego generowania JSON z `externa: 1`
+## 1. Do czego sluzy aplikacja
 
-README jest glowna dokumentacja projektu dla uzytkownika i developera.
+Aplikacja webowa uruchamiana na IIS sluzy do przygotowania i edycji plikow JSON do deployow:
+- dodawania buildow,
+- ustawiania zaleznosci miedzy buildami,
+- ustawiania zaleznosci miedzy plikami JSON,
+- zapisu plikow bezposrednio do katalogu deploya,
+- wczytywania istniejacych plikow JSON z wybranej daty instalacji,
+- walidacji paczek Ferryt w Artifactory.
 
-## 1. Zakres funkcjonalny
+## 2. Najwazniejsze funkcje
 
-Aplikacja obsluguje:
-
-- wiele flow na serwer
 - trzy konteksty serwerowe: `haaTeamCity`, `teamcity`, `ferryt`
+- wiele plikow JSON na serwer
 - wizualne zaleznosci `waitfor` miedzy buildami
 - zaleznosci miedzy plikami JSON
 - podglad JSON na zywo
-- eksport pojedynczego pliku i paczki wszystkich plikow
-- szybkie dodawanie buildow z listy
-- tryb `External`
-- buildy specjalne `TC_SQL` i `TC_PowerShell`
-- katalog buildow Ferryt wraz z walidacja paczek w Artifactory
-- automatyczny zapis stanu w `localStorage`
-- izolacje danych per zalogowany uzytkownik IIS przez `whoami.aspx`
-- logowanie aktywnosci uzytkownikow do pliku na dysku
+- `Szybkie buildy`
+- runnery specjalne dla `haaTeamCity`
+- dedykowany toolbar Ferryt
+- logowanie aktywnosci uzytkownikow
+- autozapis stanu do `localStorage`
 
-## 2. Szybki start dla uzytkownika
+## 3. Podstawowy workflow
 
 1. Otworz aplikacje w IIS.
-2. Wybierz serwer TeamCity.
-3. Ustaw nazwe pliku JSON i parametry flow.
-4. Dodaj buildy recznie albo przez `Szybkie buildy`.
-5. Polacz node'y, aby ustawic `waitfor`.
-6. Sprawdz podglad JSON po prawej.
-7. Pobierz jeden plik albo wszystkie pliki.
+2. Wybierz serwer: `haaTeamCity.mbank.pl`, `TeamCity.mbank.pl` albo `Ferryt`.
+3. Ustaw `Nazwe pliku JSON`, `Date instalacji` i pozostale parametry pliku.
+4. Dodaj buildy:
+   - recznie przyciskiem `+ Dodaj Build`,
+   - przez panel `Szybkie buildy`,
+   - albo przez przyciski runnerow dla `haaTeamCity`.
+5. Ustaw zaleznosci miedzy buildami przez polaczenia na diagramie.
+6. Ustaw zaleznosci miedzy plikami w sekcji `Zaleznosci miedzy plikami JSON`.
+7. Zapisz jeden plik albo wszystkie pliki do katalogu deploya.
 
-## 3. Tryby pracy
+## 4. Data instalacji i katalog zapisu
 
-### Flow Editor
+- Pole `Data instalacji` steruje katalogiem docelowym zapisu.
+- Pliki zapisywane sa do:
+  `D:\PROD_REPO_DATA\AutomateDeploy\Deploys\YYYY-MM-DD`
+- Przy zapisie aplikacja sprawdza, czy katalog dla tej daty istnieje.
+- Jesli nie istnieje, katalog jest tworzony automatycznie.
+- W sekcji `Wszystkie pliki JSON` wyswietlana jest aktualna pelna sciezka zapisu.
 
-To podstawowy tryb budowy flow. Kazdy flow odpowiada jednemu plikowi JSON.
+## 5. Wczytywanie istniejacych JSON-ow
 
-Najwazniejsze elementy:
+- Przy `Data instalacji` uzyj przycisku `Wczytaj z daty`.
+- Aplikacja odczyta pliki JSON z katalogu dla wybranej daty i zaladuje je do edytora.
+- Wczytanie zastapi biezaca zawartosc edytora.
+- Podczas importu odtwarzane sa:
+  - buildy,
+  - `waitfor` miedzy buildami,
+  - zaleznosci miedzy plikami JSON.
 
-- zakladki serwerow
-- zakladki flow
-- formularz ustawien flow
-- diagram buildow
-- lista zaleznosci miedzy plikami JSON
-- podglad pojedynczego JSON
-- lista wszystkich plikow JSON
-
-### External
-
-Tryb `External` generuje JSON z lista buildow, gdzie dla kazdego wpisu ustawiane jest:
-
-```json
-{
-  "enabled": 1,
-  "buildid": "BUILD_ID",
-  "externa": 1
-}
-```
-
-## 4. Obslugiwane serwery
+## 6. Obslugiwane serwery
 
 Mapowanie serwerow jest zaszyte w `app.js`:
 
@@ -71,417 +65,224 @@ Mapowanie serwerow jest zaszyte w `app.js`:
 - `teamcity` -> `https://teamcity.mbank.pl/`
 - `ferryt` -> `https://teamcity.mbank.pl/`
 
-Serwer Ferryt ma dodatkowe domyslne wartosci flow:
-
+Dla Ferryt ustawiane sa dodatkowe domyslne wartosci flow:
 - `runat: 21:00`
 - `email: hardcore@mbank.pl`
 - `blackout: "1680|Ferryt","1696|BPM Service"`
 - `filename: Ferryt_<change>`
 
-## 5. Praca z flow
+## 7. Szybkie buildy
 
-Kazdy flow przechowuje:
+- Otworz panel `Szybkie buildy`.
+- Wklej liste buildow lub pelne linki TeamCity, po jednym wpisie na linie.
+- Kliknij `Dodaj buildy`.
 
-- `filename`
-- `enabled`
-- `runat`
-- `email`
-- `blackout`
-- `sms`
-- `change`
-- `nodes`
-- `connections`
-- `interflowWaitfor`
+Akceptowane wejscie:
+- samo `BUILD_ID`
+- pelny link TeamCity z segmentem `buildConfiguration`
+- pelny link TeamCity zakonczony `#all-projects`
+- wariant z literowka `buildConfiguradion`
 
-Wazne zasady:
+Wazne:
+- duplikaty na wklejonej liscie sa blokowane,
+- konflikt nazw z istniejacymi node'ami jest rozwiazywany automatycznie przez dopisanie sufiksu,
+- checkbox `external = 1` ustawia `external` dla wszystkich nowo dodanych buildow.
 
-- flow sa rozdzielone per serwer
-- usuniecie flow usuwa tez referencje `interflowWaitfor`
-- `waitfor` na poziomie flow jest wyliczany z zaznaczonych zaleznosci miedzy plikami
-- pliki JSON sa automatycznie zapisywane do `D:\PROD_REPO_DATA\AutomateDeploy\Deploys\yyyy-MM-dd`
+## 8. Buildy i zaleznosci
 
-## 6. Praca z buildami na diagramie
-
-Node zawiera m.in.:
-
-- `name` - klucz w `builds`
+Node na diagramie zawiera m.in.:
+- `name`
 - `buildid`
 - `enabled`
 - `waitfor`
-- `retry` i `external` dla `haaTeamCity` i `teamcity`
+- `retry`
+- `external`
 - `stop`
 - `runnerType`
 - `ferrytType`
 - `params`
 
-Zaleznosci miedzy buildami ustawia sie przez przeciagniecie polaczenia z jednego node'a na drugi. Node docelowy otrzymuje `waitfor` wskazujacy nazwe poprzedniego builda, ale samo pole `waitfor` nie jest wyswietlane w edycji builda. Dla Ferryt ukryte sa tez `retry`, `external` i `stop`.
+### 8.1 Miedzy buildami
 
-## 7. Szybkie buildy
+- przeciagnij polaczenie z jednego node'a na drugi,
+- docelowy node dostanie `waitfor` wskazujacy poprzedni build.
 
-Panel `Szybkie buildy` sluzy do masowego dodawania node'ow do aktywnego flow.
+### 8.2 Miedzy plikami JSON
 
-Akceptowane wejscie:
+- uzyj sekcji `Zaleznosci miedzy plikami JSON`,
+- zaznacz, ktore pliki maja wykonac sie wczesniej.
 
-- samo `BUILD_ID`
-- pelny link TeamCity z segmentem `buildConfiguration`
-- pelny link TeamCity z koncowka `#all-projects`
-- wariant z literowka `buildConfiguradion`, jesli taki link zostal skopiowany
+## 9. Specjalne buildy runnerow
 
-Przyklad:
+Dla `haaTeamCity` dostepne sa gotowe przyciski dodawania runnerow.
 
-```text
-Build_Deploy_App1
-https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2
-https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects
-```
+Aktualne `buildid`:
+- `AutomateDeploy_SqlRunner`
+- `AutomateDeploy_ScriptRunner`
+- `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`
 
-Zasady:
+Po ustawieniu odpowiedniego `buildid` pojawiaja sie dodatkowe pola `params`.
 
-- parser wycina tylko segment po `buildConfiguration`
-- duplikaty na liscie sa blokowane
-- konflikt nazwy z istniejacym node'em powoduje automatyczne dodanie sufiksu `_2`, `_3`, ...
-- `name` i `buildid` sa ustawiane na znormalizowany `BUILD_ID`
-
-## 8. Tryb External
-
-Pole listy buildow dziala na tej samej zasadzie co `Szybkie buildy`.
-
-Tryb generuje obiekt:
-
-```json
-{
-  "tcserver": "https://haateamcity.mbank.pl/",
-  "enabled": 1,
-  "runat": "18:00",
-  "waitfor": "",
-  "builds": {
-    "BUILD_ID": {
-      "enabled": 1,
-      "buildid": "BUILD_ID",
-      "externa": 1
-    }
-  }
-}
-```
-
-## 9. Buildy specjalne `TC_SQL` i `TC_PowerShell`
-
-Specjalne typy buildow:
-
-- `TC_SQL`
-- `TC_PowerShell`
-
-Rozpoznanie jest case-insensitive.
-
-### TC_SQL
+### 9.1 AutomateDeploy_SqlRunner
 
 Wymagane pola:
-
 - `sqlserver`
 - `database`
 - `file`
 
-### TC_PowerShell
+### 9.2 AutomateDeploy_ScriptRunner
 
 Wymagane pola:
-
 - `servers`
 - `file`
 
-Aktualne zachowanie:
+### 9.3 AnsiblePlaybookRunner_ProdRunPlaybookAnsible
 
-- buildy tego typu moga miec zduplikowany `buildid`
-- wymagane pola sa walidowane przy zapisie
-- jesli nowy node parametryczny zostanie zamkniety przez `X` lub `Esc` bez zapisu, jest usuwany z diagramu
-- do JSON trafia tylko wypelnione `params`
+Dostepne pola:
+- `inventory_path`
+- `git.envbook.repo.branch`
+- `playbook_path`
 
-Przyklad:
+## 10. Buildy, ktore moga wystepowac wielokrotnie
 
-```json
-"params": {
-  "sqlserver": "SQLSERVER01",
-  "database": "MyDatabase",
-  "file": "script.sql"
-}
-```
+Ponizsze `buildid` moga pojawic sie wielokrotnie w jednym pliku JSON:
+- `AutomateDeploy_SqlRunner`
+- `AutomateDeploy_ScriptRunner`
+- `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`
 
-## 10. Buildy Ferryt
+Pozostale `buildid` sa walidowane pod katem duplikatow w ramach jednego pliku.
+
+## 11. Ferryt
 
 Dla serwera `ferryt` aplikacja udostepnia dedykowany toolbar buildow:
-
 - `SQL`
 - `SVAutoImport`
 - `Restart serwisow`
 - `BPM`
 - `Renew`
 
-Buildy Ferryt korzystaja z `ferrytType` i zestawu pol `params` zdefiniowanego w `FERRYT_BUILD_CATALOG`.
-
-### Typy Renew
-
-`Renew` rozwija sie do jednego z typow:
-
+`Renew` rozwija sie do:
 - `RenewApplication File`
 - `RenewApplication SQL`
 - `RenewApplication Scenario`
 
+Buildy Ferryt korzystaja z `ferrytType` i zestawu pol `params` zdefiniowanego w `FERRYT_BUILD_CATALOG`.
+
 ### Walidacja Artifactory
 
 Przycisk `Validate`:
+- zbiera buildy Ferryt wymagajace sprawdzenia paczek,
+- wysyla `POST` do `validate-artifactory.aspx`,
+- pokazuje znalezione, brakujace i pominiete paczki.
 
-- zbiera buildy Ferryt, ktore wymagaja sprawdzenia paczek
-- wysyla POST do `validate-artifactory.aspx`
-- pokazuje znalezione, brakujace i pominiete paczki
+## 12. Zapisywanie
 
-Walidacja nie dotyczy typow, ktore nie maja `artifactoryFolder` i `packageField`.
+Masz dostepne trzy warianty zapisu:
+- `Zapisz` w podgladzie aktualnego pliku,
+- `Zapisz` przy konkretnym pliku na liscie `Wszystkie pliki JSON`,
+- `Zapisz wszystko do Deploya`.
 
-## 11. Generowanie JSON
+Przy zapisie logowane sa:
+- uzytkownik z IIS,
+- typ akcji,
+- data instalacji,
+- katalog docelowy,
+- lista zapisanych plikow.
 
-Glowna funkcja to `generateJson(flow)` w `app.js`.
+Model zapisu:
+- frontend wysyla dane do `save-deploys.aspx`,
+- `save-deploys.aspx` uruchamia `save-deploys.ps1` przez `powershell.exe`,
+- skrypt PowerShell tworzy katalog daty i zapisuje pliki JSON.
 
-Zasady generacji:
+## 13. Dostep do aplikacji
 
-- `tcserver` wynika z aktywnego serwera
-- `enabled` jest brany z flow
-- `waitfor` na poziomie flow pochodzi z `interflowWaitfor`
-- `builds` sa generowane z uporzadkowanej listy node'ow
-- build Ferryt nie zawiera pol `retry`, `external`, `stop`
-- `params` sa dolaczane tylko, gdy po sanitizacji pozostaja niepuste
+- Dostep do strony jest kontrolowany przez `Authorization Rules` w IIS.
+- Uzytkownik bez dostepu zobaczy `access-denied.html`.
+- Uprawniony uzytkownik nie widzi komunikatu o ograniczeniu dostepu na glownej stronie.
 
-Przykladowy wynik:
+## 14. Autozapis i dane lokalne
 
-```json
-{
-  "tcserver": "https://haateamcity.mbank.pl/",
-  "enabled": 1,
-  "runat": "18:00",
-  "builds": {
-    "Deploy_Api": {
-      "enabled": 1,
-      "buildid": "Deploy_Api"
-    },
-    "Run_SQL": {
-      "waitfor": "Deploy_Api",
-      "enabled": 1,
-      "buildid": "TC_SQL",
-      "params": {
-        "sqlserver": "SQLSERVER01",
-        "database": "CoreDb",
-        "file": "deploy.sql"
-      }
-    }
-  }
-}
-```
-
-## 12. Autozapis i dane lokalne
-
-Stan jest zapisywany w `localStorage` co 5 sekund oraz po akcjach opakowanych przez `withSave(...)`.
+Stan edytora zapisuje sie automatycznie w `localStorage`.
 
 Klucz:
-
 - `deployJsonGenerator`
-- albo `deployJsonGenerator_<DOMAIN\\user>` jesli `whoami.aspx` zwroci uzytkownika
+- albo `deployJsonGenerator_<DOMAIN\\user>`, jesli `whoami.aspx` zwroci uzytkownika
 
 To oznacza:
+- odswiezenie strony przywraca lokalny stan,
+- dane uzytkownikow sa separowane po loginie IIS.
 
-- odswiezenie strony przywraca flow
-- dane jednego uzytkownika nie nadpisuja danych innego, jesli IIS zwraca tozsamosc
-
-## 13. Skroty i zachowanie UI
+## 15. Skroty i zachowanie UI
 
 - `Esc` zamyka modal edycji builda
-- `Esc` zamyka drawer szybkich buildow
+- `Esc` zamyka drawer `Szybkie buildy`
 - `Esc` zamyka modal walidacji
 - `Delete` usuwa aktualnie edytowany build
 
-## 14. Struktura projektu
+## 16. Favicon
 
-Najwazniejsze pliki:
+Aplikacja korzysta z:
+- `images/favicon.png`
 
-- `index.html` - UI
-- `styles.css` - style
-- `app.js` - logika klienta
-- `validate-artifactory.aspx` - backend walidacji Artifactory
-- `whoami.aspx` - endpoint identyfikacji uzytkownika
-- `web.config` - konfiguracja IIS
-- `Resolve-ArtifactoryKeePass.ps1` - pobieranie hasla z KeePassVault
-- `App_Data/artifactory.config.json` - konfiguracja Artifactory
-
-## 15. Architektura techniczna
+## 17. Architektura techniczna
 
 ### Frontend
 
 Stack:
-
 - HTML
 - CSS
 - vanilla JavaScript
 
 Frontend odpowiada za:
-
-- zarzadzanie stanem aplikacji
-- render flow i node'ow
-- topologiczne porzadkowanie buildow
-- generacje JSON
-- obsluge `localStorage`
-- walidacje formularzy
+- zarzadzanie stanem aplikacji,
+- render flow i node'ow,
+- generacje JSON,
+- obsluge `localStorage`,
+- walidacje formularzy.
 
 ### Backend IIS
 
-Projekt nie ma klasycznego backendu aplikacyjnego. Zamiast tego sa dwa lekkie endpointy ASP.NET Web Forms:
-
-- `whoami.aspx`
+W projekcie dzialaja lekkie endpointy ASP.NET Web Forms:
+- `save-deploys.aspx`
+- `load-deploys.aspx`
+- `activity-log.aspx`
 - `validate-artifactory.aspx`
+- `whoami.aspx`
 
-## 16. Endpoint `whoami.aspx`
+## 18. Najwazniejsze pliki projektu
 
-Cel:
+- `index.html` - UI
+- `styles.css` - style
+- `app.js` - logika klienta
+- `save-deploys.aspx` - backend zapisu deployow
+- `save-deploys.ps1` - zapis plikow na dysk
+- `load-deploys.aspx` - odczyt plikow z katalogu deploya
+- `activity-log.aspx` - logowanie aktywnosci
+- `validate-artifactory.aspx` - walidacja Artifactory
+- `whoami.aspx` - identyfikacja uzytkownika
+- `web.config` - konfiguracja IIS
+- `Resolve-ArtifactoryKeePass.ps1` - pobieranie hasla z KeePassVault
+- `App_Data/artifactory.config.json` - konfiguracja Artifactory
 
-- zwraca nazwe aktualnego uzytkownika IIS w JSON
-
-Przyklad odpowiedzi:
-
-```json
-{
-  "username": "DOMAIN\\user"
-}
-```
-
-Jest to wykorzystywane do separacji danych w `localStorage`.
-
-## 17. Endpoint `validate-artifactory.aspx`
-
-Cel:
-
-- sprawdza, czy paczki dla buildow Ferryt sa widoczne w Artifactory
-
-Metoda:
-
-- tylko `POST`
-
-Przyklad request:
-
-```json
-{
-  "flowName": "ferryt_deploy_1",
-  "change": "CHG123456",
-  "packages": [
-    {
-      "nodeName": "SQL",
-      "buildType": "SQL",
-      "folder": "sql",
-      "package": "package.zip"
-    }
-  ]
-}
-```
-
-Przyklad response:
-
-```json
-{
-  "ok": true,
-  "found": [],
-  "missing": [],
-  "skipped": []
-}
-```
-
-Szczegoly techniczne:
-
-- odpowiedzi bledow IIS sa przepuszczane do klienta
-- endpoint ustawia `Response.TrySkipIisCustomErrors = true`
-- polaczenie z Artifactory odbywa sie po Basic Auth
-- obsluga protokolu wymusza TLS 1.2
-
-## 18. Konfiguracja Artifactory
-
-Konfiguracja jest czytana z:
-
-- `App_Data/artifactory.config.json`
-
-Obslugiwane pola:
-
-- `authMode`
-- `baseUrl`
-- `artifactoryUser`
-- `username`
-- `password`
-- `keePassScriptPath`
-- `keePassCredentialTitle`
-- `keePassUsernameOverride`
-
-W praktyce kod korzysta z:
-
-- `baseUrl`
-- `username`
-- `password`
-- `artifactoryUser`
-- `keePassCredentialTitle`
-- `keePassUsernameOverride`
-
-Jesli `authMode` wskazuje KeePass albo haslo jest puste, endpoint probuje pobrac haslo przez `Resolve-ArtifactoryKeePass.ps1`.
-
-Przykladowa konfiguracja:
-
-```json
-{
-  "authMode": "KeePassVault",
-  "baseUrl": "https://artifactory.example.local/artifactory/repo-name",
-  "artifactoryUser": "ARTIFACTORY_PROD",
-  "username": "svc_artifactory",
-  "password": "",
-  "keePassCredentialTitle": "ARTIFACTORY_PROD",
-  "keePassUsernameOverride": ""
-}
-```
-
-## 19. KeePassVault
-
-Skrypt `Resolve-ArtifactoryKeePass.ps1`:
-
-- znajduje `KeePassVaultAPI.ps1` w repo nadrzednym
-- pobiera dane po `CredentialTitle`
-- zwraca JSON z `username` i `password`
-
-Warunki poprawnego dzialania:
-
-- `KeePassVaultAPI.ps1` musi istniec w oczekiwanej lokalizacji
-- proces IIS musi miec mozliwosc uruchomienia `powershell.exe`
-- konto aplikacyjne musi miec dostep do zrodla danych KeePassVault
-
-## 20. Konfiguracja IIS
+## 19. Konfiguracja IIS
 
 `web.config` ustawia m.in.:
-
 - `customErrors mode="Off"`
-- `httpErrors existingResponse="PassThrough"`
-- MIME dla `.json`, `.woff`, `.woff2`
+- obsluge `401/403` do `access-denied.html`
 - `index.html` jako default document
+- MIME dla `.json`, `.woff`, `.woff2`
+- wylaczony cache dla statyk
 - naglowki:
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: SAMEORIGIN`
   - `X-XSS-Protection: 1; mode=block`
 
-## 21. Logowanie aktywnosci uzytkownikow
+## 20. Logowanie aktywnosci
 
-Projekt zapisuje aktywnosc uzytkownikow do pliku:
-
+Aktywnosc jest zapisywana do:
 - `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\userActivity.log`
 
-Frontend wysyla lekki request do:
-
-- `activity-log.aspx`
-
-Backend dopisuje pojedynczy wiersz w formacie:
-
-```text
-yyyy-MM-dd HH:mm:ss.fff<TAB>DOMAIN\user<TAB>server<TAB>EVENT_TYPE<TAB>eventData
-```
-
 Przykladowe zdarzenia:
-
 - `PAGE_LOAD`
 - `SERVER_SWITCH`
 - `FLOW_ADD`
@@ -492,126 +293,115 @@ Przykladowe zdarzenia:
 - `NODE_SAVE`
 - `NODE_DELETE`
 - `BULK_ADD_BUILDS`
-- `JSON_COPY`
-- `JSON_DOWNLOAD_CURRENT`
-- `JSON_DOWNLOAD_ALL`
-- `EXTERNA_GENERATE`
-- `EXTERNA_DOWNLOAD`
+- `JSON_SAVE_CURRENT`
+- `JSON_SAVE_FLOW`
+- `JSON_SAVE_ALL`
+- `JSON_LOAD_DEPLOY`
 - `FERRYT_VALIDATE_START`
 - `FERRYT_VALIDATE_OK`
 - `FERRYT_VALIDATE_ERROR`
 
-Wymagania:
+## 21. Konfiguracja Artifactory
 
-- konto AppPool musi miec prawo zapisu do `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\`
-- Windows Authentication pozwala logowac login domenowy; bez niej w logu pojawi sie `anonymous`
+Konfiguracja jest czytana z:
+- `App_Data/artifactory.config.json`
 
-## 22. Rozszerzanie aplikacji
+Obslugiwane pola:
+- `authMode`
+- `baseUrl`
+- `artifactoryUser`
+- `username`
+- `password`
+- `keePassScriptPath`
+- `keePassCredentialTitle`
+- `keePassUsernameOverride`
 
-### Dodanie nowego pola do node'a
+Jesli `authMode` wskazuje KeePass albo haslo jest puste, endpoint probuje pobrac haslo przez `Resolve-ArtifactoryKeePass.ps1`.
 
-Najczestsze miejsca zmian:
-
-- formularz w `index.html`
-- `openNodeModal()`
-- `saveNodeEdit()`
-- `generateJson(flow)`
-
-### Zmiana rozpoznawania buildow specjalnych
-
-Kluczowe funkcje:
-
-- `isTcSql(buildId)`
-- `isTcPowerShell(buildId)`
-
-Jesli chcesz zmienic nazwy rozpoznawanych buildow, zacznij od tych helperow.
-
-### Dodanie nowego typu Ferryt
-
-Zmien:
-
-- `FERRYT_BUILD_CATALOG`
-- opcjonalnie `FERRYT_TOOLBAR_ITEMS`
-- jesli dotyczy `Renew`, to rowniez `FERRYT_RENEW_TYPES`
-
-### Rozbudowa walidacji
-
-Punkty wejscia:
-
-- walidacje formularza w `saveNodeEdit()`
-- parser danych Ferryt w `getFerrytParamsFromInputs()`
-- walidator endpointu w `validate-artifactory.aspx`
-
-## 23. Utrzymanie i testy reczne
+## 22. Utrzymanie i testy reczne
 
 Minimum po zmianach:
-
 1. Dodanie zwyklego builda i zapis JSON.
 2. Dodanie zaleznosci miedzy buildami.
 3. Dodanie zaleznosci miedzy plikami JSON.
-4. Test `Szybkich buildow` dla:
-   - zwyklej nazwy
-   - pelnego linku TeamCity
-   - linku z `#all-projects`
-5. Test `External` dla tych samych wariantow wejscia.
-6. Test `TC_SQL` i `TC_PowerShell`:
-   - walidacja pol
-   - zamkniecie przez `X` bez zapisu
-   - obecnosci `params` w JSON
-7. Test Ferryt:
-   - dodanie builda z toolbaru
-   - walidacja wymaganych pol
-   - `Validate` do Artifactory
-8. Odswiezenie strony i sprawdzenie `localStorage`.
+4. Test `Szybkich buildow` dla zwyklej nazwy i pelnego linku TeamCity.
+5. Test runnerow specjalnych i ich `params`.
+6. Test Ferryt i `Validate`.
+7. Test zapisu do katalogu deploya.
+8. Test wczytania JSON-ow z wybranej daty.
+9. Test odswiezenia strony i odtworzenia `localStorage`.
 
-## 24. Najczestsze problemy
+## 23. Najczestsze problemy
 
-### Puste buildy specjalne zostaja na diagramie
+### Nie widac nowych zmian na produkcji
 
-Aktualna logika usuwa nowy node parametryczny po zamknieciu modala bez zapisu. Jesli problem wraca, sprawdz zmiany wokol:
-
-- `pendingNewNodeId`
-- `closeNodeModal()`
-- `nodeRequiresCompletedParams()`
-
-### W `Szybkich buildach` albo `External` zapisuje sie pelny link zamiast `buildid`
-
-Parser wejscia jest w:
-
-- `extractBuildIdFromInput(value)`
-- `parseBuildListInput(value)`
-
-To tam nalezy poprawiac logike normalizacji linkow TeamCity.
-
-### Walidacja Artifactory zwraca bledy HTML zamiast JSON
-
-Frontend probuje zamienic taka odpowiedz na czytelny komunikat. Jesli nadal widzisz problem, sprawdz:
-
-- `web.config`
-- `validate-artifactory.aspx`
-- dostepnosc `App_Data/artifactory.config.json`
+Sprawdz:
+- czy wdrozenie trafil do wlasciwego katalogu IIS,
+- czy statyki nie sa serwowane ze starego cache,
+- czy laduja sie pliki `styles.css` i `app.js` z aktualnym parametrem `?v=...`.
 
 ### Brak wpisow w `userActivity.log`
 
 Sprawdz:
+- czy AppPool ma prawo zapisu do `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\`,
+- czy `activity-log.aspx` odpowiada poprawnie,
+- czy IIS zwraca login domenowy, jesli oczekiwany jest konkretny user.
 
-- czy istnieje endpoint `activity-log.aspx`
-- czy AppPool ma prawo zapisu do `D:\PROD_REPO_DATA\IIS\DeployJsonGenerator\`
-- czy aplikacja nie dostaje odpowiedzi 500 z endpointu logowania
-- czy Windows Authentication jest wlaczone, jesli oczekiwany jest login domenowy
+### Walidacja Artifactory zwraca HTML zamiast JSON
+
+Sprawdz:
+- `web.config`,
+- `validate-artifactory.aspx`,
+- dostepnosc `App_Data/artifactory.config.json`.
+
+## 24. Skrocony changelog
+
+### 2026-03-13
+
+Dodano:
+- backendowy zapis deployow do katalogu daty z automatycznym tworzeniem folderu,
+- `load-deploys.aspx`,
+- przycisk `Wczytaj z daty`,
+- ekran `access-denied.html`,
+- jawna liste `buildid`, ktore moga sie powtarzac,
+- favicon z `images/favicon.png`.
+
+Zmieniono:
+- usunieto zakladke `External`,
+- `Szybkie buildy` dostaly checkbox `external = 1`,
+- przebudowano UI pod dodawanie i edycje plikow JSON,
+- zmieniono nazwy runnerow na:
+  - `AutomateDeploy_SqlRunner`
+  - `AutomateDeploy_ScriptRunner`
+  - `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`
+- dodano cache-busting dla frontu i wylaczono cache statyk po IIS.
+
+Naprawiono:
+- model zapisu `ASPX -> powershell.exe -> save-deploys.ps1`,
+- zgodnosc `save-deploys.ps1` z Windows PowerShell 5.1,
+- logowanie pelnej listy zapisanych plikow,
+- obsluge `401/403` w IIS,
+- blokade duplikatow dla `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`.
+
+### 2026-03-11
+
+Dodano:
+- wsparcie dla pelnych linkow TeamCity w masowym dodawaniu buildow,
+- logowanie aktywnosci do pliku,
+- `activity-log.aspx`.
+
+Naprawiono:
+- walidacje `params` dla runnerow,
+- parser linkow TeamCity,
+- kompilacje walidatora ASP.NET.
+
+### 2026-03-10
+
+Dodano:
+- walidacje paczek Ferryt w Artifactory,
+- integracje z KeePass dla hasla do Artifactory.
 
 ## 25. Autorstwo
 
 Footer aplikacji wskazuje:
-
 - `(c) 2026 DEI-ZUK-C | L.Peryt`
-
-## 26. Pliki historyczne
-
-W repo nadal moga istniec starsze pliki dokumentacyjne:
-
-- `INSTRUKCJA_UZYTKOWNIKA.md`
-- `DOKUMENTACJA_TECHNICZNA.md`
-- `DOKUMENTACJA_BUILDID_TC.md`
-
-Kanoniczna dokumentacja projektu znajduje sie w tym pliku i w `CHANGELOG.md`.
