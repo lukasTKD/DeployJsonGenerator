@@ -2151,7 +2151,7 @@ const App = (() => {
     }
 
     function getAutoSaveStatusLabel(exportDate) {
-        return `Zapis do: ...\\Deploys\\${exportDate}`;
+        return `Zapis do: ${AUTO_SAVE_ROOT}\\${exportDate}`;
     }
 
     function updateExportDate(value) {
