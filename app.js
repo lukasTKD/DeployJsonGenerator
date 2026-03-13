@@ -211,7 +211,9 @@ const App = (() => {
         try {
             const payload = new URLSearchParams({
                 server: state.currentServer || '',
+                eventType: eventType || 'UNKNOWN',
                 event: eventType || 'UNKNOWN',
+                action: eventType || 'UNKNOWN',
                 data: stringifyLogDetails(details)
             }).toString();
 
