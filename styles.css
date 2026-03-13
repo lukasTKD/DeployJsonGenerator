@@ -690,11 +690,24 @@ body {
 
 .preview-header .section-title {
     margin-bottom: 0;
+    min-width: 0;
 }
 
 .preview-actions {
     display: flex;
     gap: 6px;
+}
+
+.preview-header-with-status {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    column-gap: 12px;
+    row-gap: 6px;
+}
+
+.preview-header-with-status .preview-actions {
+    justify-self: end;
 }
 
 .json-output {
@@ -997,7 +1010,19 @@ body {
 
 .preview-substatus {
     display: block;
+    grid-column: 1 / -1;
+    width: 100%;
     margin-bottom: 10px;
+}
+
+@media (max-width: 768px) {
+    .preview-header-with-status {
+        grid-template-columns: 1fr;
+    }
+
+    .preview-header-with-status .preview-actions {
+        justify-self: start;
+    }
 }
 
 .inline-field-row {

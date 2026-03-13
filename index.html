@@ -152,13 +152,13 @@
                 </div>
 
                 <div class="json-all-preview card">
-                    <div class="preview-header">
+                    <div class="preview-header preview-header-with-status">
                         <h3 class="section-title">Wszystkie pliki JSON</h3>
                         <div class="preview-actions">
                             <button class="btn btn-primary" onclick="App.saveAllJsonToDeploy()">Zapisz wszystko do Deploya</button>
                         </div>
+                        <span class="inline-field-status inline-field-status-compact preview-substatus" id="autoSaveStatus"></span>
                     </div>
-                    <span class="inline-field-status inline-field-status-compact preview-substatus" id="autoSaveStatus"></span>
                     <div class="all-files-list" id="allFilesList">
                         <!-- Generated dynamically -->
                     </div>
