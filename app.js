@@ -151,6 +151,37 @@ const App = (() => {
             .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_');
     }
 
+    function stripJsonExtension(value) {
+        return String(value || '').trim().replace(/\.json$/i, '');
+    }
+
+    function parseDelimitedNames(value) {
+        if (typeof value !== 'string') return [];
+        return value
+            .split(',')
+            .map(item => stripJsonExtension(item).trim())
+            .filter(Boolean);
+    }
+
+    function normalizeFlag(value, fallback = 1) {
+        if (value === 0 || value === '0') return 0;
+        if (value === 1 || value === '1') return 1;
+        return fallback;
+    }
+
+    function formatBlackoutForInput(value) {
+        if (Array.isArray(value)) {
+            return value
+                .map(item => String(item || '').trim())
+                .filter(Boolean)
+                .map(item => `"${item.replace(/^"(.*)"$/, '$1')}"`)
+                .join(',');
+        }
+
+        const text = String(value || '').trim().replace(/^"(.*)"$/, '$1');
+        return text ? `"${text}"` : '';
+    }
+
     function syncFerrytFilename(flow) {
         if (!flow || !isFerrytServer(flow.server)) return;
         flow.filename = `Ferryt_${sanitizeWindowsFileName(flow.change || '')}`;
@@ -309,13 +340,16 @@ const App = (() => {
 
     // ========== FLOW MANAGEMENT ==========
 
-    function addFlow() {
-        const id = 'flow_' + Date.now();
-        const ferryt = isFerrytServer();
-        state.flows[id] = {
-            id,
+    function generateFlowId() {
+        return 'flow_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    }
+
+    function createFlowModel(server = state.currentServer, overrides = {}) {
+        const ferryt = isFerrytServer(server);
+        const flow = {
+            id: overrides.id || generateFlowId(),
             filename: ferryt ? 'Ferryt_' : 'deploy_' + (state.flowOrder.length + 1),
-            server: state.currentServer,
+            server,
             enabled: 1,
             runat: ferryt ? FERRYT_DEFAULTS.runat : '18:00',
             email: ferryt ? FERRYT_DEFAULTS.email : '',
@@ -326,6 +360,20 @@ const App = (() => {
             connections: [],
             interflowWaitfor: []
         };
+
+        Object.assign(flow, overrides);
+        flow.server = server;
+        flow.nodes = overrides.nodes || {};
+        flow.connections = Array.isArray(overrides.connections) ? overrides.connections : [];
+        flow.interflowWaitfor = Array.isArray(overrides.interflowWaitfor) ? overrides.interflowWaitfor : [];
+        applyFerrytFlowDefaults(flow);
+        return flow;
+    }
+
+    function addFlow() {
+        const flow = createFlowModel(state.currentServer);
+        const id = flow.id;
+        state.flows[id] = flow;
         state.flowOrder.push(id);
         state.currentFlowId = id;
         renderFlowTabs();
@@ -334,14 +382,14 @@ const App = (() => {
         updateJsonPreview();
         renderInterflowDeps();
         renderAllFilesList();
-        logEvent('FLOW_ADD', { flowId: id, filename: state.flows[id].filename, server: state.currentServer });
+        logEvent('FLOW_ADD', { flowId: id, filename: flow.filename, server: state.currentServer });
         return id;
     }
 
     function closeAllFlows() {
         const serverFlows = getServerFlows();
         if (serverFlows.length === 0) return;
-        if (!confirm('Zamknąć wszystkie flow dla bieżącego serwera? Dane zostaną usunięte.')) return;
+        if (!confirm('Zamknac wszystkie pliki JSON dla biezacego serwera? Dane zostana usuniete.')) return;
         const serverFlowIds = new Set(serverFlows.map(f => f.id));
         // Remove flows belonging to current server
         serverFlowIds.forEach(id => {
@@ -356,7 +404,7 @@ const App = (() => {
         // Create one fresh flow
         logEvent('FLOW_CLOSE_ALL', { server: state.currentServer, count: serverFlows.length });
         addFlow();
-        showToast('Zamknięto wszystkie flow', 'success');
+        showToast('Zamknieto wszystkie pliki JSON', 'success');
     }
 
     function removeFlow(flowId) {
@@ -364,7 +412,7 @@ const App = (() => {
             showToast('Nie można usunąć ostatniego flow', 'error');
             return;
         }
-        if (!confirm('Usunąć ten flow?')) return;
+        if (!confirm('Usunac ten plik JSON?')) return;
         const removedFlow = state.flows[flowId];
         delete state.flows[flowId];
         state.flowOrder = state.flowOrder.filter(id => id !== flowId);
@@ -410,11 +458,15 @@ const App = (() => {
         return addFlow();
     }
 
+    function syncServerTabs() {
+        document.querySelectorAll('.server-tabs-container .tab').forEach(tab => {
+            tab.classList.toggle('active', tab.dataset.server === state.currentServer);
+        });
+    }
+
     function switchServer(server) {
         state.currentServer = server;
-        document.querySelectorAll('.server-tabs-container .tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.server === server);
-        });
+        syncServerTabs();
         ensureCurrentServerFlow();
         updateServerSpecificUI();
         renderFlowTabs();
@@ -1548,7 +1600,7 @@ const App = (() => {
 
         const serverFlows = getServerFlows();
         if (serverFlows.length < 2) {
-            list.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">Dodaj więcej niż jeden flow aby ustawić zależności między nimi.</div>';
+            list.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">Dodaj wiecej niz jeden plik JSON, aby ustawic zaleznosci miedzy nimi.</div>';
             return;
         }
 
@@ -1603,7 +1655,7 @@ const App = (() => {
         const serverFlows = getServerFlows();
 
         if (serverFlows.length === 0) {
-            list.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">Brak flows dla tego serwera.</div>';
+            list.innerHTML = '<div style="color:#999; font-size:12px; padding:8px;">Brak plikow JSON dla tego serwera.</div>';
             return;
         }
 
@@ -1620,12 +1672,12 @@ const App = (() => {
     }
 
     function updateFlowCount() {
-        document.getElementById('flowCount').textContent = `Flows: ${getServerFlows().length}`;
+        document.getElementById('flowCount').textContent = `Pliki JSON: ${getServerFlows().length}`;
     }
 
     // ========== SAVE / DOWNLOAD ==========
 
-    async function parseSaveResponse(response) {
+    async function parseJsonResponse(response) {
         const raw = await response.text();
         if (!raw) {
             return { ok: response.ok };
@@ -1650,8 +1702,259 @@ const App = (() => {
             }).toString()
         });
 
-        const data = await parseSaveResponse(response);
+        const data = await parseJsonResponse(response);
         return { ok: response.ok, status: response.status, data };
+    }
+
+    async function getDeployFilesRequest(exportDate) {
+        const response = await fetch(buildAppUrl(`load-deploys.aspx?exportDate=${encodeURIComponent(exportDate)}`), {
+            method: 'GET',
+            cache: 'no-store',
+            credentials: 'same-origin'
+        });
+
+        const data = await parseJsonResponse(response);
+        return { ok: response.ok, status: response.status, data };
+    }
+
+    function findServerByTcserver(tcserver) {
+        const normalized = String(tcserver || '').trim().toLowerCase();
+        if (!normalized) return '';
+        if (normalized === SERVERS.haaTeamCity.toLowerCase()) return 'haaTeamCity';
+        if (normalized === SERVERS.teamcity.toLowerCase()) return 'teamcity';
+        return '';
+    }
+
+    function hasFerrytSignature(filename, json) {
+        if (/^ferryt_/i.test(stripJsonExtension(filename))) {
+            return true;
+        }
+
+        const builds = json && typeof json.builds === 'object'
+            ? Object.values(json.builds)
+            : (json && typeof json.bilds === 'object' ? Object.values(json.bilds) : []);
+
+        return builds.some(build => {
+            const buildId = String((build && build.buildid) || '').trim();
+            const params = build && build.params && typeof build.params === 'object' ? build.params : {};
+
+            return /^DEIZUKC_Ferryt_/i.test(buildId) ||
+                buildId === FERRYT_RENEW_BUILD_ID ||
+                Object.prototype.hasOwnProperty.call(params, 'deploy_PackageName') ||
+                Object.prototype.hasOwnProperty.call(params, 'ImportProcessPackageName') ||
+                Object.prototype.hasOwnProperty.call(params, 'RenewAppFileNameTC') ||
+                Object.prototype.hasOwnProperty.call(params, 'RenewAppTC') ||
+                Object.prototype.hasOwnProperty.call(params, 'RenewAppSQLTC') ||
+                Object.prototype.hasOwnProperty.call(params, 'todo');
+        });
+    }
+
+    function detectServerFromDeployJson(filename, json) {
+        const explicitServer = findServerByTcserver(json ? json.tcserver : '');
+        if (explicitServer === 'haaTeamCity') {
+            return explicitServer;
+        }
+        if (hasFerrytSignature(filename, json)) {
+            return 'ferryt';
+        }
+        return explicitServer || 'teamcity';
+    }
+
+    function setLoadDeployBusy(isBusy) {
+        const buttons = [];
+        document.querySelectorAll('.inline-field-button').forEach(button => buttons.push(button));
+
+        buttons.forEach(button => {
+            if (!button) return;
+            button.disabled = isBusy;
+            button.textContent = isBusy ? 'Wczytywanie...' : 'Wczytaj z daty';
+        });
+    }
+
+    function importDeployFiles(files, exportDate) {
+        const importedFlows = {};
+        const importedOrder = [];
+        const importedEntries = [];
+        let importedNodeCounter = 0;
+
+        files.forEach((file, fileIndex) => {
+            const fileName = String(file && file.filename ? file.filename : '').trim();
+            const rawContent = String(file && file.content ? file.content : '').trim();
+            if (!fileName || !rawContent) return;
+
+            let parsedJson;
+            try {
+                parsedJson = JSON.parse(rawContent);
+            } catch (error) {
+                return;
+            }
+
+            if (!parsedJson || typeof parsedJson !== 'object') return;
+
+            const server = detectServerFromDeployJson(fileName, parsedJson);
+            const filename = stripJsonExtension(fileName) || `deploy_${fileIndex + 1}`;
+            const inferredFerrytChange = server === 'ferryt' && /^Ferryt_/i.test(filename)
+                ? filename.replace(/^Ferryt_/i, '')
+                : '';
+
+            const flow = createFlowModel(server, {
+                id: generateFlowId(),
+                filename,
+                enabled: normalizeFlag(parsedJson.enabled, 1),
+                runat: String(parsedJson.runat || ''),
+                email: String(parsedJson.email || ''),
+                blackout: formatBlackoutForInput(parsedJson.blackout),
+                sms: String(parsedJson.sms || ''),
+                change: String(parsedJson.change || inferredFerrytChange || ''),
+                nodes: {},
+                connections: [],
+                interflowWaitfor: []
+            });
+
+            const builds = parsedJson.builds && typeof parsedJson.builds === 'object'
+                ? parsedJson.builds
+                : (parsedJson.bilds && typeof parsedJson.bilds === 'object' ? parsedJson.bilds : {});
+            const nodeNameMap = {};
+
+            Object.entries(builds).forEach(([nodeName, buildConfig], buildIndex) => {
+                importedNodeCounter++;
+                const nodeId = 'node_' + importedNodeCounter;
+                const safeBuild = buildConfig && typeof buildConfig === 'object' ? buildConfig : {};
+                const params = sanitizeParams(safeBuild.params || {});
+                const buildId = String(safeBuild.buildid || '').trim();
+                const runnerType = isTcSql(buildId)
+                    ? 'sql'
+                    : (isTcPowerShell(buildId) ? 'script' : (isTcRunOnly(buildId) ? 'runonly' : ''));
+
+                const node = {
+                    id: nodeId,
+                    name: String(nodeName || `Build_${buildIndex + 1}`),
+                    buildid: buildId,
+                    enabled: normalizeFlag(safeBuild.enabled, 1),
+                    waitfor: typeof safeBuild.waitfor === 'string' ? safeBuild.waitfor.trim() : '',
+                    retry: server === 'ferryt' ? '' : String(safeBuild.retry || ''),
+                    external: server === 'ferryt' ? '' : String(safeBuild.external || ''),
+                    stop: server === 'ferryt' ? '' : String(safeBuild.stop || ''),
+                    ferrytType: '',
+                    runnerType,
+                    x: Math.max(30, 120 + (fileIndex % 3) * 28),
+                    y: 30 + buildIndex * 110
+                };
+
+                if (Object.keys(params).length > 0) {
+                    node.params = params;
+                }
+
+                if (server === 'ferryt') {
+                    normalizeFerrytNode(node);
+                }
+
+                flow.nodes[nodeId] = node;
+                nodeNameMap[node.name] = nodeId;
+            });
+
+            Object.values(flow.nodes).forEach(node => {
+                const dependencies = parseDelimitedNames(node.waitfor);
+                if (dependencies.length === 0) {
+                    node.waitfor = '';
+                    return;
+                }
+
+                const dependencyId = nodeNameMap[dependencies[0]];
+                node.waitfor = dependencies[0];
+
+                if (!dependencyId || dependencyId === node.id) return;
+                if (!flow.connections.some(connection => connection.from === dependencyId && connection.to === node.id)) {
+                    flow.connections.push({ from: dependencyId, to: node.id });
+                }
+            });
+
+            importedFlows[flow.id] = flow;
+            importedOrder.push(flow.id);
+            importedEntries.push({
+                flow,
+                rootWaitfor: parseDelimitedNames(parsedJson.waitfor)
+            });
+        });
+
+        if (importedOrder.length === 0) {
+            throw new Error('Brak poprawnych plikow JSON do wczytania dla wybranej daty.');
+        }
+
+        importedEntries.forEach(entry => {
+            const candidates = Object.values(importedFlows).filter(flow =>
+                flow.server === entry.flow.server && flow.id !== entry.flow.id
+            );
+
+            entry.flow.interflowWaitfor = entry.rootWaitfor
+                .map(waitforName => candidates.find(candidate => stripJsonExtension(candidate.filename) === waitforName))
+                .filter(Boolean)
+                .map(candidate => candidate.id);
+        });
+
+        state.flows = importedFlows;
+        state.flowOrder = importedOrder;
+        state.nodeCounter = importedNodeCounter;
+        state.exportDate = exportDate;
+        state.editingNodeId = null;
+        state.pendingNewNodeId = null;
+        const nodeModal = document.getElementById('nodeEditModal');
+        if (nodeModal) nodeModal.style.display = 'none';
+
+        const availableServers = importedOrder
+            .map(flowId => importedFlows[flowId] && importedFlows[flowId].server)
+            .filter(Boolean);
+        const preferredServer = availableServers.includes(state.currentServer)
+            ? state.currentServer
+            : (availableServers[0] || 'haaTeamCity');
+
+        state.currentServer = preferredServer;
+        state.currentFlowId = importedOrder.find(flowId => importedFlows[flowId].server === preferredServer) || importedOrder[0];
+        saveState();
+        return importedOrder.length;
+    }
+
+    async function loadDeploysForDate() {
+        const exportDate = state.exportDate || getTodayIsoDate();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(exportDate)) {
+            showToast('Ustaw poprawna date instalacji', 'error');
+            return;
+        }
+
+        if (!confirm(`Wczytac pliki JSON z katalogu ${AUTO_SAVE_ROOT}\\${exportDate}? Biezaca zawartosc edytora zostanie zastapiona.`)) {
+            return;
+        }
+
+        setLoadDeployBusy(true);
+        try {
+            const result = await getDeployFilesRequest(exportDate);
+            const data = result.data || {};
+            if (!result.ok || !data.ok) {
+                throw new Error(data.error || `Blad odczytu (${result.status})`);
+            }
+
+            const importedCount = importDeployFiles(Array.isArray(data.files) ? data.files : [], exportDate);
+            syncServerTabs();
+            updateServerSpecificUI();
+            renderFlowTabs();
+            renderCurrentFlow();
+            updateFlowCount();
+            updateJsonPreview();
+            renderInterflowDeps();
+            renderAllFilesList();
+            updateExportDate(exportDate);
+            showToast(`Wczytano ${importedCount} plik(ow) JSON z daty ${exportDate}`, 'success');
+            logEvent('JSON_LOAD_DEPLOY', {
+                exportDate,
+                directory: data.directory || `${AUTO_SAVE_ROOT}\\${exportDate}`,
+                count: importedCount,
+                files: Array.isArray(data.files) ? data.files.map(file => file.filename) : []
+            });
+        } catch (error) {
+            showToast(`Wczytanie nieudane: ${error && error.message ? error.message : 'Brak odpowiedzi z endpointu odczytu.'}`, 'error');
+        } finally {
+            setLoadDeployBusy(false);
+        }
     }
 
     async function saveFilesToDeploy(files, successMessage, logType, logDetails = {}) {
@@ -2401,6 +2704,7 @@ const App = (() => {
         saveCurrentJsonToDeploy,
         saveFlowJsonToDeploy,
         saveAllJsonToDeploy,
+        loadDeploysForDate,
         downloadCurrentJson,
         downloadFlowJson,
         downloadAllJson,
