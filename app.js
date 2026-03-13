@@ -189,6 +189,17 @@ const App = (() => {
         return text ? `"${text}"` : '';
     }
 
+    function formatSmsForInput(value) {
+        if (Array.isArray(value)) {
+            return value
+                .map(item => String(item || '').trim().replace(/^"(.*)"$/, '$1'))
+                .filter(Boolean)
+                .join(',');
+        }
+
+        return String(value || '').trim().replace(/^"(.*)"$/, '$1');
+    }
+
     function syncFerrytFilename(flow) {
         if (!flow || !isFerrytServer(flow.server)) return;
         flow.filename = `Ferryt_${sanitizeWindowsFileName(flow.change || '')}`;
@@ -1483,7 +1494,12 @@ const App = (() => {
         // Optional root-level fields
         if (flow.email) json.email = flow.email;
         if (flow.blackout) json.blackout = parseBlackoutValue(flow.blackout);
-        if (flow.sms) json.sms = flow.sms;
+        if (flow.sms) {
+            const smsValues = parseSmsValue(flow.sms);
+            if (smsValues.length > 0) {
+                json.sms = smsValues;
+            }
+        }
         if (flow.change) json.change = flow.change;
 
         // Builds (fixed: "builds" not "bilds")
@@ -1559,6 +1575,15 @@ const App = (() => {
         if (parts.length === 0) return '';
         if (parts.length === 1) return parts[0];
         return parts;
+    }
+
+    function parseSmsValue(value) {
+        if (!value) return [];
+
+        return String(value)
+            .split(',')
+            .map(item => item.trim().replace(/^"(.*)"$/, '$1'))
+            .filter(Boolean);
     }
 
     function updateJsonPreview() {
@@ -1818,7 +1843,7 @@ const App = (() => {
                 runat: String(parsedJson.runat || ''),
                 email: String(parsedJson.email || ''),
                 blackout: formatBlackoutForInput(parsedJson.blackout),
-                sms: String(parsedJson.sms || ''),
+                sms: formatSmsForInput(parsedJson.sms),
                 change: String(parsedJson.change || inferredFerrytChange || ''),
                 nodes: {},
                 connections: [],
