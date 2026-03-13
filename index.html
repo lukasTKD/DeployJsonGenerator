@@ -73,7 +73,6 @@
                                 <input type="date" id="deployFolderDate" onchange="App.updateExportDate(this.value)">
                                 <button type="button" class="btn btn-secondary btn-sm inline-field-button" onclick="App.loadDeploysForDate()">Wczytaj z daty</button>
                             </div>
-                            <span class="inline-field-status" id="autoSaveStatus"></span>
                         </div>
                         <div class="form-group">
                             <label>runat</label>
@@ -162,8 +161,9 @@
                 <div class="json-all-preview card">
                     <div class="preview-header">
                         <h3 class="section-title">Wszystkie pliki JSON</h3>
-                        <div class="preview-actions">
+                        <div class="preview-actions preview-actions-stack">
                             <button class="btn btn-primary" onclick="App.saveAllJsonToDeploy()">Zapisz wszystko do Deploya</button>
+                            <span class="inline-field-status inline-field-status-compact" id="autoSaveStatus"></span>
                         </div>
                     </div>
                     <div class="all-files-list" id="allFilesList">

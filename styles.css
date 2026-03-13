@@ -293,15 +293,13 @@ body {
 }
 
 .btn-add-flow {
-    min-width: 42px;
-    height: 34px;
-    padding: 0 14px;
-    border: none;
-    border-radius: 4px;
+    padding: 6px 14px;
+    border: 1px solid #ff8600;
+    border-radius: 20px;
     background: #ff8600;
     color: #fff;
-    font-size: 13px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -314,6 +312,7 @@ body {
 
 .btn-add-flow:hover {
     background: #e67800;
+    border-color: #e67800;
     box-shadow: 0 2px 6px rgba(255, 134, 0, 0.3);
 }
 
@@ -1002,11 +1001,26 @@ body {
     margin-top: 6px;
     font-size: 12px;
     color: #666;
-    word-break: break-all;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .inline-field-status.error {
     color: #c62828;
+}
+
+.inline-field-status-compact {
+    max-width: 100%;
+    margin-top: 4px;
+    text-align: right;
+}
+
+.preview-actions-stack {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    min-width: 0;
 }
 
 .inline-field-row {
