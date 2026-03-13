@@ -182,10 +182,13 @@
                     <button class="bulk-drawer-close" onclick="App.closeBulkDrawer()" title="Zamknij">&times;</button>
                 </div>
                 <p class="bulk-drawer-desc">Wklej listę nazw buildów lub pełne linki TeamCity (jeden wpis na linię). Buildy zostaną dodane do bieżącego flow.</p>
-                <label class="bulk-drawer-option">
-                    <input type="checkbox" id="bulkBuildExternal">
-                    <span>External = 1 dla wszystkich dodanych buildów</span>
-                </label>
+                <div class="bulk-drawer-field">
+                    <span class="bulk-drawer-label">Opcje dodawania</span>
+                    <label class="bulk-drawer-option">
+                        <input type="checkbox" id="bulkBuildExternal">
+                        <span>Ustaw `external = 1` dla wszystkich dodanych buildów</span>
+                    </label>
+                </div>
                 <textarea id="bulkBuildList" class="bulk-build-textarea" rows="14" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects"></textarea>
                 <div class="bulk-drawer-actions">
                     <button class="btn btn-primary" onclick="App.bulkAddBuilds()">Dodaj buildy</button>

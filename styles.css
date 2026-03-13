@@ -1320,6 +1320,18 @@ body {
     margin: 0;
 }
 
+.bulk-drawer-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bulk-drawer-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #333;
+}
+
 .bulk-build-textarea {
     flex: 1;
     min-height: 280px;
@@ -1347,7 +1359,12 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 13px;
+    padding: 10px 12px;
+    border: 1px solid #e3e3e3;
+    border-radius: 8px;
+    background: #fafafa;
+    font-size: 12px;
+    line-height: 1.4;
     color: #444;
 }
 
@@ -1355,6 +1372,7 @@ body {
     width: 16px;
     height: 16px;
     accent-color: #E60000;
+    flex-shrink: 0;
 }
 
 .bulk-drawer-actions {
