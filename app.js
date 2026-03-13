@@ -1961,7 +1961,9 @@ const App = (() => {
         }
         if (!flow) return;
         const textarea = document.getElementById('bulkBuildList');
+        const externalCheckbox = document.getElementById('bulkBuildExternal');
         const lines = parseBuildListInput(textarea.value);
+        const forceExternal = !!(externalCheckbox && externalCheckbox.checked && !isFerrytServer(flow.server));
 
         if (lines.length === 0) {
             showToast('Wklej przynajmniej jedną nazwę builda', 'error');
@@ -2015,7 +2017,7 @@ const App = (() => {
                 enabled: 1,
                 waitfor: '',
                 retry: !isFerrytServer(flow.server) ? '1' : '',
-                external: !isFerrytServer(flow.server) ? '' : '',
+                external: forceExternal ? '1' : (!isFerrytServer(flow.server) ? '' : ''),
                 x: Math.max(30, (canvasW - nodeW) / 2),
                 y: 30 + (existingCount + i) * 110
             };
@@ -2030,7 +2032,8 @@ const App = (() => {
         logEvent('BULK_ADD_BUILDS', {
             flowId: flow.id,
             count: addedNames.length,
-            builds: addedNames.join(',')
+            builds: addedNames.join(','),
+            external: forceExternal ? '1' : '0'
         });
     }
 
@@ -2323,119 +2326,6 @@ const App = (() => {
         }
     }
 
-    // ========== EXTERNA MODE ==========
-
-    let externaJson = null;
-
-    function switchMode(mode) {
-        document.querySelectorAll('.mode-tab').forEach(t => {
-            t.classList.toggle('active', t.dataset.mode === mode);
-        });
-        document.getElementById('editorMode').style.display = mode === 'editor' ? '' : 'none';
-        document.getElementById('externaMode').style.display = mode === 'externa' ? 'flex' : 'none';
-
-        if (mode === 'externa') {
-            populateExternaRunat();
-            updateExternaBuildCount();
-        }
-        logEvent('MODE_SWITCH', mode);
-    }
-
-    function populateExternaRunat() {
-        const select = document.getElementById('externaRunat');
-        if (select.options.length > 1) return;
-        generateTimeOptions().forEach(t => {
-            const opt = document.createElement('option');
-            opt.value = t;
-            opt.textContent = t;
-            select.appendChild(opt);
-        });
-        select.value = '18:00';
-    }
-
-    function updateExternaBuildCount() {
-        const textarea = document.getElementById('externaBuildList');
-        const lines = parseBuildListInput(textarea.value);
-        document.getElementById('externaBuildCount').textContent = `${lines.length} buildów`;
-    }
-
-    function generateExterna() {
-        const textarea = document.getElementById('externaBuildList');
-        const lines = parseBuildListInput(textarea.value);
-
-        if (lines.length === 0) {
-            showToast('Wklej przynajmniej jedną nazwę builda', 'error');
-            return;
-        }
-
-        // Check for duplicates
-        const seen = new Set();
-        const duplicates = [];
-        lines.forEach(name => {
-            if (seen.has(name)) duplicates.push(name);
-            seen.add(name);
-        });
-        if (duplicates.length > 0) {
-            showToast(`Duplikaty: ${duplicates.join(', ')}`, 'error');
-            return;
-        }
-
-        const serverKey = document.getElementById('externaServer').value;
-        const runat = document.getElementById('externaRunat').value;
-        const waitfor = document.getElementById('externaWaitfor').value.trim();
-        const json = {
-            tcserver: SERVERS[serverKey],
-            enabled: 1,
-            runat: runat || '',
-            waitfor: waitfor || ''
-        };
-
-        json.builds = {};
-        lines.forEach(name => {
-            json.builds[name] = {
-                enabled: 1,
-                buildid: name,
-                externa: 1
-            };
-        });
-
-        externaJson = json;
-
-        const preview = document.getElementById('externaJsonPreview');
-        preview.innerHTML = syntaxHighlight(formatJson(json));
-        showToast(`Wygenerowano JSON z ${lines.length} buildami`, 'success');
-        logEvent('EXTERNA_GENERATE', {
-            server: serverKey,
-            count: lines.length,
-            waitfor
-        });
-    }
-
-    function copyExternaJson() {
-        if (!externaJson) {
-            showToast('Najpierw wygeneruj JSON', 'error');
-            return;
-        }
-        logEvent('EXTERNA_COPY', {
-            filename: document.getElementById('externaFilename').value.trim() || 'externa_deploy'
-        });
-        navigator.clipboard.writeText(formatJson(externaJson)).then(() => {
-            showToast('JSON skopiowany do schowka', 'success');
-        }).catch(() => {
-            showToast('Nie udało się skopiować', 'error');
-        });
-    }
-
-    function downloadExternaJson() {
-        if (!externaJson) {
-            showToast('Najpierw wygeneruj JSON', 'error');
-            return;
-        }
-        const filename = (document.getElementById('externaFilename').value.trim() || 'externa_deploy') + '.json';
-        logEvent('EXTERNA_DOWNLOAD', { filename });
-        downloadJsonFile(filename, externaJson);
-    }
-
     // ========== KEYBOARD SHORTCUTS ==========
 
     function initKeyboard() {
@@ -2487,11 +2377,6 @@ const App = (() => {
         updateAutoSaveStatus(`Zapis do: ${AUTO_SAVE_ROOT}\\${state.exportDate}`, false, `${AUTO_SAVE_ROOT}\\${state.exportDate}`);
         initKeyboard();
         setInterval(saveState, 5000);
-        // Live build count for externa
-        const extTextarea = document.getElementById('externaBuildList');
-        if (extTextarea) {
-            extTextarea.addEventListener('input', updateExternaBuildCount);
-        }
         logEvent('PAGE_LOAD', { loadedFromStorage: loaded, user: currentUsername || '' });
     }
 
@@ -2519,10 +2404,6 @@ const App = (() => {
         downloadCurrentJson,
         downloadFlowJson,
         downloadAllJson,
-        switchMode,
-        generateExterna,
-        copyExternaJson,
-        downloadExternaJson,
         handleFerrytRenewTypeChange,
         bulkAddBuilds: withSave(bulkAddBuilds),
         toggleInterflowDep: withSave(toggleInterflowDep),

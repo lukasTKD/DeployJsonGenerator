@@ -21,12 +21,6 @@
                     Deploy JSON Generator
                 </h1>
             </div>
-            <div class="header-center">
-                <div class="mode-tabs">
-                    <button class="mode-tab active" data-mode="editor" onclick="App.switchMode('editor')">Flow Editor</button>
-                    <button class="mode-tab" data-mode="externa" onclick="App.switchMode('externa')">External</button>
-                </div>
-            </div>
             <div class="header-right">
                 <span class="header-info" id="flowCount">Flows: 0</span>
             </div>
@@ -188,69 +182,17 @@
                     <button class="bulk-drawer-close" onclick="App.closeBulkDrawer()" title="Zamknij">&times;</button>
                 </div>
                 <p class="bulk-drawer-desc">Wklej listę nazw buildów lub pełne linki TeamCity (jeden wpis na linię). Buildy zostaną dodane do bieżącego flow.</p>
-                <textarea id="bulkBuildList" class="externa-textarea" rows="14" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects"></textarea>
+                <label class="bulk-drawer-option">
+                    <input type="checkbox" id="bulkBuildExternal">
+                    <span>External = 1 dla wszystkich dodanych buildów</span>
+                </label>
+                <textarea id="bulkBuildList" class="bulk-build-textarea" rows="14" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects"></textarea>
                 <div class="bulk-drawer-actions">
                     <button class="btn btn-primary" onclick="App.bulkAddBuilds()">Dodaj buildy</button>
                     <button class="btn btn-secondary" onclick="App.closeBulkDrawer()">Zamknij</button>
                 </div>
             </aside>
         </div><!-- /editorMode -->
-
-        <!-- ===== EXTERNA MODE ===== -->
-        <div id="externaMode" style="display:none;">
-            <div class="externa-layout">
-                <div class="externa-panel card">
-                    <h3 class="section-title">Generator Externa</h3>
-                    <p class="externa-desc">Wklej listę nazw buildów lub pełne linki TeamCity (każdy w nowej linii) i wygeneruj plik JSON z externa: 1</p>
-
-                    <div class="externa-settings">
-                        <div class="form-group">
-                            <label>Serwer TeamCity</label>
-                            <select id="externaServer">
-                                <option value="haaTeamCity">haaTeamCity.mbank.pl (https://haateamcity.mbank.pl)</option>
-                                <option value="teamcity">TeamCity.mbank.pl (https://teamcity.mbank.pl)</option>
-                                <option value="ferryt">Ferryt (https://teamcity.mbank.pl)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Nazwa pliku JSON</label>
-                            <input type="text" id="externaFilename" placeholder="externa_deploy" value="externa_deploy">
-                        </div>
-                        <div class="form-group">
-                            <label>runat</label>
-                            <select id="externaRunat">
-                                <option value="18:00" selected>18:00</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>waitfor</label>
-                            <input type="text" id="externaWaitfor" placeholder="Opcjonalne" value="">
-                        </div>
-                    </div>
-
-                    <div class="form-group" style="margin-top:8px; flex:1; display:flex; flex-direction:column;">
-                        <label>Lista buildów (jeden na linię)</label>
-                        <textarea id="externaBuildList" class="externa-textarea" rows="12" placeholder="Build_Deploy_App1&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App2&#10;https://teamcity.mbank.pl/buildConfiguration/Build_Deploy_App3#all-projects&#10;..."></textarea>
-                    </div>
-
-                    <div class="externa-actions">
-                        <span class="externa-count" id="externaBuildCount">0 buildów</span>
-                        <button class="btn btn-primary" onclick="App.generateExterna()">Generuj JSON</button>
-                    </div>
-                </div>
-
-                <div class="externa-preview card">
-                    <div class="preview-header">
-                        <h3 class="section-title">Podgląd JSON</h3>
-                        <div class="preview-actions">
-                            <button class="btn btn-secondary btn-sm" onclick="App.copyExternaJson()">Kopiuj</button>
-                            <button class="btn btn-primary btn-sm" onclick="App.downloadExternaJson()">Pobierz</button>
-                        </div>
-                    </div>
-                    <pre class="json-output" id="externaJsonPreview">{ }</pre>
-                </div>
-            </div>
-        </div><!-- /externaMode -->
     </div><!-- /container -->
 
     <!-- Node Edit Modal -->
