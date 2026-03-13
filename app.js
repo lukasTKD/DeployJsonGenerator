@@ -170,6 +170,12 @@ const App = (() => {
             .filter(Boolean);
     }
 
+    function normalizeJsonFileContent(value) {
+        return String(value || '')
+            .replace(/^\uFEFF/, '')
+            .trim();
+    }
+
     function normalizeFlag(value, fallback = 1) {
         if (value === 0 || value === '0') return 0;
         if (value === 1 || value === '1') return 1;
@@ -1818,7 +1824,7 @@ const App = (() => {
 
         files.forEach((file, fileIndex) => {
             const fileName = String(file && file.filename ? file.filename : '').trim();
-            const rawContent = String(file && file.content ? file.content : '').trim();
+            const rawContent = normalizeJsonFileContent(file && file.content ? file.content : '');
             if (!fileName || !rawContent) return;
 
             let parsedJson;
