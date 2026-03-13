@@ -209,6 +209,7 @@
                 <div class="form-group">
                     <label>buildid</label>
                     <input type="text" id="nodeEditBuildId" placeholder="NAZWA_BUILDA">
+                    <div class="field-note">Dozwolone duplikaty buildid: `AutomateDeploy_SqlRunner`, `AutomateDeploy_ScriptRunner`, `AnsiblePlaybookRunner_ProdRunPlaybookAnsible`.</div>
                 </div>
                 <div class="form-group">
                     <label>enabled</label>
@@ -234,9 +235,9 @@
                     <input type="text" id="nodeEditStop" placeholder="Opcjonalne">
                 </div>
 
-                <!-- TC_SQL params -->
+                <!-- AutomateDeploy_SqlRunner params -->
                 <div id="tcSqlParams" class="tc-params-section" style="display:none;">
-                    <div class="tc-params-header">Parametry TC_SQL</div>
+                    <div class="tc-params-header">Parametry AutomateDeploy_SqlRunner</div>
                     <div class="form-group">
                         <label>sqlserver</label>
                         <input type="text" id="nodeEditSqlServer" placeholder="np. SQLSERVER01">
@@ -251,9 +252,9 @@
                     </div>
                 </div>
 
-                <!-- TC_PowerShell params -->
+                <!-- AutomateDeploy_ScriptRunner params -->
                 <div id="tcPowerShellParams" class="tc-params-section" style="display:none;">
-                    <div class="tc-params-header">Parametry TC_PowerShell</div>
+                    <div class="tc-params-header">Parametry AutomateDeploy_ScriptRunner</div>
                     <div class="form-group">
                         <label>servers</label>
                         <input type="text" id="nodeEditPsServers" placeholder="np. SRV01,SRV02">
@@ -264,9 +265,9 @@
                     </div>
                 </div>
 
-                <!-- TC_RunOnly params -->
+                <!-- AnsiblePlaybookRunner_ProdRunPlaybookAnsible params -->
                 <div id="tcRunOnlyParams" class="tc-params-section" style="display:none;">
-                    <div class="tc-params-header">Parametry TC_RunOnly</div>
+                    <div class="tc-params-header">Parametry AnsiblePlaybookRunner_ProdRunPlaybookAnsible</div>
                     <div class="form-group">
                         <label>inventory_path</label>
                         <input type="text" id="nodeEditRunOnlyInventory" placeholder="np. /path/to/inventory">

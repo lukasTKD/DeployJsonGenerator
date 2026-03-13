@@ -11,9 +11,14 @@ const App = (() => {
         ferryt: 'https://teamcity.mbank.pl/'
     };
 
-    const SQL_RUNNER_BUILD_ID = 'TC_SQL';
-    const SCRIPT_RUNNER_BUILD_ID = 'TC_PowerShell';
-    const RUNONLY_BUILD_ID = 'TC_RunOnly';
+    const SQL_RUNNER_BUILD_ID = 'AutomateDeploy_SqlRunner';
+    const SCRIPT_RUNNER_BUILD_ID = 'AutomateDeploy_ScriptRunner';
+    const RUNONLY_BUILD_ID = 'AnsiblePlaybookRunner_ProdRunPlaybookAnsible';
+    const ALLOW_DUPLICATE_BUILD_IDS = [
+        SQL_RUNNER_BUILD_ID,
+        SCRIPT_RUNNER_BUILD_ID,
+        RUNONLY_BUILD_ID
+    ];
     const FERRYT_RENEW_PLACEHOLDER = 'Renew';
     const FERRYT_RENEW_BUILD_ID = 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment';
 
@@ -554,8 +559,8 @@ const App = (() => {
     // ========== TC BUILD PARAMS ==========
 
     const TC_BUILD_PARAMS = {
-        'TC_SQL': ['sqlserver', 'database', 'file'],
-        'TC_PowerShell': ['servers', 'file']
+        [SQL_RUNNER_BUILD_ID]: ['sqlserver', 'database', 'file'],
+        [SCRIPT_RUNNER_BUILD_ID]: ['servers', 'file']
     };
 
     function isSqlRunnerType(runnerType) {
@@ -576,6 +581,12 @@ const App = (() => {
 
     function isRunOnlyType(runnerType) {
         return runnerType === 'runonly';
+    }
+
+    function allowsDuplicateBuildId(buildId) {
+        return ALLOW_DUPLICATE_BUILD_IDS.some(allowedId =>
+            buildId && buildId.toLowerCase() === allowedId.toLowerCase()
+        );
     }
 
     function isTcRunOnly(buildId) {
@@ -678,14 +689,14 @@ const App = (() => {
 
     function loadTcParams(node) {
         const params = sanitizeParams(node.params || {});
-        // TC_SQL fields
+        // AutomateDeploy_SqlRunner fields
         document.getElementById('nodeEditSqlServer').value = params.sqlserver || '';
         document.getElementById('nodeEditDatabase').value = params.database || '';
         document.getElementById('nodeEditSqlFile').value = params.file || '';
-        // TC_PowerShell fields
+        // AutomateDeploy_ScriptRunner fields
         document.getElementById('nodeEditPsServers').value = params.servers || '';
         document.getElementById('nodeEditPsFile').value = params.file || '';
-        // TC_RunOnly fields
+        // AnsiblePlaybookRunner_ProdRunPlaybookAnsible fields
         document.getElementById('nodeEditRunOnlyInventory').value = params.inventory_path || '';
         document.getElementById('nodeEditRunOnlyBranch').value = params['git.envbook.repo.branch'] || '';
         document.getElementById('nodeEditRunOnlyPlaybook').value = params.playbook_path || '';
@@ -778,8 +789,7 @@ const App = (() => {
         if (!buildid) return null; // empty is allowed (placeholder used)
         if (isFerrytServer(flow.server)) return null;
         if (allowDuplicate) return null;
-        // TC_SQL and TC_PowerShell can be duplicated (same buildid, different name)
-        if (isTcSql(buildid) || isTcPowerShell(buildid)) return null;
+        if (allowsDuplicateBuildId(buildid)) return null;
         const duplicate = Object.values(flow.nodes).find(
             n => n.buildid === buildid && n.id !== excludeNodeId
         );
