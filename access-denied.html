@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brak dostępu - Deploy JSON Generator</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(180deg, #f7f7f7 0%, #efefef 100%);
+            color: #333;
+        }
+
+        .access-shell {
+            width: min(760px, 100%);
+            background: #fff;
+            border: 1px solid #e4d4d4;
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow: 0 18px 45px rgba(0, 0, 0, 0.10);
+        }
+
+        .access-header {
+            padding: 22px 28px;
+            background: #f6f6f6;
+            border-bottom: 2px solid #e60000;
+        }
+
+        .access-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #222;
+        }
+
+        .access-subtitle {
+            margin-top: 8px;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .access-body {
+            padding: 30px 28px 32px;
+        }
+
+        .access-alert {
+            padding: 18px 20px;
+            border-left: 4px solid #e60000;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #fff6f6 0%, #fff 100%);
+            border: 1px solid #f0c7c7;
+        }
+
+        .access-alert h2 {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #b30000;
+        }
+
+        .access-alert p {
+            font-size: 15px;
+            line-height: 1.6;
+            color: #444;
+        }
+
+        .access-list {
+            margin-top: 20px;
+            padding: 18px 20px;
+            background: #fafafa;
+            border: 1px solid #e8e8e8;
+            border-radius: 12px;
+        }
+
+        .access-list strong {
+            display: block;
+            margin-bottom: 8px;
+            color: #222;
+        }
+
+        .access-list ul {
+            padding-left: 18px;
+        }
+
+        .access-list li {
+            margin-bottom: 6px;
+            line-height: 1.5;
+        }
+
+        .access-footer {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+    <main class="access-shell" role="main" aria-labelledby="access-title">
+        <header class="access-header">
+            <h1 id="access-title" class="access-title">Deploy JSON Generator</h1>
+            <p class="access-subtitle">Informacja o dostępie do aplikacji</p>
+        </header>
+
+        <section class="access-body">
+            <div class="access-alert">
+                <h2>Brak dostępu do strony</h2>
+                <p>Ta strona jest dostępna tylko i wyłącznie dla członków zespołu <strong>DEI-ZUK-C</strong>.</p>
+            </div>
+
+            <div class="access-list">
+                <strong>Dostęp do aplikacji mają wyłącznie:</strong>
+                <ul>
+                    <li>osoby dodane do listy dostępu skonfigurowanej w IIS,</li>
+                    <li>użytkownicy należący do zespołu DEI-ZUK-C.</li>
+                </ul>
+            </div>
+
+            <p class="access-footer">Jeśli uważasz, że powinieneś mieć dostęp do tej strony, skontaktuj się z właścicielem aplikacji lub administratorem odpowiedzialnym za reguły dostępu w IIS.</p>
+        </section>
+    </main>
+</body>
+</html>
