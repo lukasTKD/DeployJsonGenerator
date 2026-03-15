@@ -163,6 +163,9 @@ const App = (() => {
     }
 
     function parseDelimitedNames(value) {
+        if (Array.isArray(value)) {
+            return value.reduce((result, item) => result.concat(parseDelimitedNames(item)), []);
+        }
         if (typeof value !== 'string') return [];
         return value
             .split(',')
@@ -176,9 +179,194 @@ const App = (() => {
             .trim();
     }
 
+    function getObjectValueCaseInsensitive(obj, keys) {
+        if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return undefined;
+        const normalizedKeys = Array.isArray(keys) ? keys.map(key => String(key).toLowerCase()) : [String(keys).toLowerCase()];
+        const entries = Object.entries(obj);
+
+        for (const normalizedKey of normalizedKeys) {
+            const matchedEntry = entries.find(([key]) => String(key).toLowerCase() === normalizedKey);
+            if (matchedEntry) {
+                return matchedEntry[1];
+            }
+        }
+
+        return undefined;
+    }
+
+    function stripJsonLikeComments(value) {
+        const input = String(value || '');
+        let output = '';
+        let inString = false;
+        let escaped = false;
+        let inLineComment = false;
+        let inBlockComment = false;
+
+        for (let i = 0; i < input.length; i++) {
+            const currentChar = input[i];
+            const nextChar = input[i + 1];
+
+            if (inLineComment) {
+                if (currentChar === '\n' || currentChar === '\r') {
+                    inLineComment = false;
+                    output += currentChar;
+                }
+                continue;
+            }
+
+            if (inBlockComment) {
+                if (currentChar === '*' && nextChar === '/') {
+                    inBlockComment = false;
+                    i++;
+                }
+                continue;
+            }
+
+            if (inString) {
+                output += currentChar;
+                if (escaped) {
+                    escaped = false;
+                } else if (currentChar === '\\') {
+                    escaped = true;
+                } else if (currentChar === '"') {
+                    inString = false;
+                }
+                continue;
+            }
+
+            if (currentChar === '"') {
+                inString = true;
+                output += currentChar;
+                continue;
+            }
+
+            if (currentChar === '/' && nextChar === '/') {
+                inLineComment = true;
+                i++;
+                continue;
+            }
+
+            if (currentChar === '/' && nextChar === '*') {
+                inBlockComment = true;
+                i++;
+                continue;
+            }
+
+            output += currentChar;
+        }
+
+        return output;
+    }
+
+    function stripJsonTrailingCommas(value) {
+        const input = String(value || '');
+        let output = '';
+        let inString = false;
+        let escaped = false;
+
+        for (let i = 0; i < input.length; i++) {
+            const currentChar = input[i];
+
+            if (inString) {
+                output += currentChar;
+                if (escaped) {
+                    escaped = false;
+                } else if (currentChar === '\\') {
+                    escaped = true;
+                } else if (currentChar === '"') {
+                    inString = false;
+                }
+                continue;
+            }
+
+            if (currentChar === '"') {
+                inString = true;
+                output += currentChar;
+                continue;
+            }
+
+            if (currentChar === ',') {
+                let nextIndex = i + 1;
+                while (nextIndex < input.length && /\s/.test(input[nextIndex])) {
+                    nextIndex++;
+                }
+
+                if (input[nextIndex] === '}' || input[nextIndex] === ']') {
+                    continue;
+                }
+            }
+
+            output += currentChar;
+        }
+
+        return output;
+    }
+
+    function sanitizeJsonLikeContent(value) {
+        return stripJsonTrailingCommas(stripJsonLikeComments(value));
+    }
+
+    function looksLikeDeployJsonObject(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+        return ['tcserver', 'builds', 'bilds', 'runat', 'waitfor', 'enabled', 'email', 'change']
+            .some(key => getObjectValueCaseInsensitive(value, [key]) !== undefined);
+    }
+
+    function unwrapDeployJsonRoot(value) {
+        if (Array.isArray(value)) {
+            if (value.length !== 1) return null;
+            return unwrapDeployJsonRoot(value[0]);
+        }
+
+        if (!value || typeof value !== 'object') return null;
+        if (looksLikeDeployJsonObject(value)) return value;
+
+        const nestedCandidate = getObjectValueCaseInsensitive(value, ['deploy', 'data', 'payload', 'item', 'json']);
+        if (nestedCandidate && nestedCandidate !== value) {
+            const unwrappedNestedCandidate = unwrapDeployJsonRoot(nestedCandidate);
+            if (unwrappedNestedCandidate) {
+                return unwrappedNestedCandidate;
+            }
+        }
+
+        return value;
+    }
+
+    function parseDeployJsonContent(value) {
+        const normalizedContent = normalizeJsonFileContent(value);
+        if (!normalizedContent) return null;
+
+        const candidates = [normalizedContent];
+        const sanitizedContent = sanitizeJsonLikeContent(normalizedContent);
+        if (sanitizedContent && sanitizedContent !== normalizedContent) {
+            candidates.push(sanitizedContent);
+        }
+
+        for (const candidate of candidates) {
+            try {
+                const parsed = JSON.parse(candidate);
+                const unwrapped = unwrapDeployJsonRoot(parsed);
+                if (unwrapped && typeof unwrapped === 'object' && !Array.isArray(unwrapped)) {
+                    return unwrapped;
+                }
+            } catch (error) {
+                // Try the next relaxed variant.
+            }
+        }
+
+        return null;
+    }
+
     function normalizeFlag(value, fallback = 1) {
+        if (value === true) return 1;
+        if (value === false) return 0;
         if (value === 0 || value === '0') return 0;
         if (value === 1 || value === '1') return 1;
+        if (typeof value === 'string') {
+            const normalized = value.trim().toLowerCase();
+            if (normalized === 'true' || normalized === 'yes') return 1;
+            if (normalized === 'false' || normalized === 'no') return 0;
+        }
         return fallback;
     }
 
@@ -1567,7 +1755,8 @@ const App = (() => {
     }
 
     function formatJson(obj) {
-        return JSON.stringify(obj, null, 4);
+        // Keep Windows-style line endings so generated files match existing deploy JSON files.
+        return JSON.stringify(obj, null, 4).replace(/\n/g, '\r\n');
     }
 
     function parseBlackoutValue(value) {
@@ -1762,11 +1951,91 @@ const App = (() => {
         return { ok: response.ok, status: response.status, data };
     }
 
+    function getDeployJsonValue(json, keys, fallback = undefined) {
+        const value = getObjectValueCaseInsensitive(json, keys);
+        return value === undefined ? fallback : value;
+    }
+
+    function getBuildContainer(json) {
+        const container = getDeployJsonValue(json, ['builds', 'bilds']);
+        if (!container || typeof container !== 'object') return null;
+        return container;
+    }
+
+    function getBuildNameFromEntry(buildConfig, fallbackName) {
+        const explicitName = getObjectValueCaseInsensitive(buildConfig, ['name', 'buildname', 'build_name', 'node', 'nodeName', 'key']);
+        const normalizedName = String(explicitName || '').trim();
+        return normalizedName || fallbackName;
+    }
+
+    function getBuildEntries(json) {
+        const container = getBuildContainer(json);
+        if (!container) return [];
+
+        if (Array.isArray(container)) {
+            return container
+                .map((buildConfig, index) => {
+                    if (!buildConfig || typeof buildConfig !== 'object') return null;
+                    const fallbackName = `Build_${index + 1}`;
+                    return [getBuildNameFromEntry(buildConfig, fallbackName), buildConfig];
+                })
+                .filter(Boolean);
+        }
+
+        return Object.entries(container).map(([nodeName, buildConfig], index) => {
+            const safeBuildConfig = buildConfig && typeof buildConfig === 'object'
+                ? buildConfig
+                : {};
+            const fallbackName = String(nodeName || '').trim() || `Build_${index + 1}`;
+            return [getBuildNameFromEntry(safeBuildConfig, fallbackName), safeBuildConfig];
+        });
+    }
+
+    function normalizeParamsSource(params) {
+        if (!params) return {};
+
+        if (Array.isArray(params)) {
+            return params.reduce((result, item) => {
+                if (!item || typeof item !== 'object') {
+                    return result;
+                }
+
+                const key = getObjectValueCaseInsensitive(item, ['key', 'name', 'param', 'id']);
+                if (key === undefined || key === null || String(key).trim() === '') {
+                    return result;
+                }
+
+                result[String(key).trim()] = getObjectValueCaseInsensitive(item, ['value', 'val', 'content']);
+                return result;
+            }, {});
+        }
+
+        if (typeof params === 'object') {
+            return params;
+        }
+
+        return {};
+    }
+
+    function getSkippedFilesMessage(skippedFiles) {
+        if (!Array.isArray(skippedFiles) || skippedFiles.length === 0) return '';
+        const skippedNames = skippedFiles.map(item => item.filename).filter(Boolean);
+        if (skippedNames.length === 0) return '';
+        if (skippedNames.length <= 3) {
+            return skippedNames.join(', ');
+        }
+        return `${skippedNames.slice(0, 3).join(', ')} +${skippedNames.length - 3}`;
+    }
+
     function findServerByTcserver(tcserver) {
-        const normalized = String(tcserver || '').trim().toLowerCase();
+        const normalized = String(tcserver || '')
+            .trim()
+            .toLowerCase()
+            .replace(/^https?:\/\//, '')
+            .replace(/\/+$/, '');
         if (!normalized) return '';
-        if (normalized === SERVERS.haaTeamCity.toLowerCase()) return 'haaTeamCity';
-        if (normalized === SERVERS.teamcity.toLowerCase()) return 'teamcity';
+        if (normalized.includes('haateamcity.mbank.pl')) return 'haaTeamCity';
+        if (normalized.includes('teamcity.mbank.pl')) return 'teamcity';
         return '';
     }
 
@@ -1775,13 +2044,11 @@ const App = (() => {
             return true;
         }
 
-        const builds = json && typeof json.builds === 'object'
-            ? Object.values(json.builds)
-            : (json && typeof json.bilds === 'object' ? Object.values(json.bilds) : []);
+        const builds = getBuildEntries(json).map(([, buildConfig]) => buildConfig);
 
         return builds.some(build => {
-            const buildId = String((build && build.buildid) || '').trim();
-            const params = build && build.params && typeof build.params === 'object' ? build.params : {};
+            const buildId = String(getObjectValueCaseInsensitive(build, ['buildid', 'buildId', 'build_id']) || '').trim();
+            const params = sanitizeParams(normalizeParamsSource(getObjectValueCaseInsensitive(build, ['params'])));
 
             return /^DEIZUKC_Ferryt_/i.test(buildId) ||
                 buildId === FERRYT_RENEW_BUILD_ID ||
@@ -1795,7 +2062,7 @@ const App = (() => {
     }
 
     function detectServerFromDeployJson(filename, json) {
-        const explicitServer = findServerByTcserver(json ? json.tcserver : '');
+        const explicitServer = findServerByTcserver(getDeployJsonValue(json, ['tcserver'], ''));
         if (explicitServer === 'haaTeamCity') {
             return explicitServer;
         }
@@ -1820,6 +2087,7 @@ const App = (() => {
         const importedFlows = {};
         const importedOrder = [];
         const importedEntries = [];
+        const skippedFiles = [];
         let importedNodeCounter = 0;
 
         files.forEach((file, fileIndex) => {
@@ -1827,14 +2095,11 @@ const App = (() => {
             const rawContent = normalizeJsonFileContent(file && file.content ? file.content : '');
             if (!fileName || !rawContent) return;
 
-            let parsedJson;
-            try {
-                parsedJson = JSON.parse(rawContent);
-            } catch (error) {
+            const parsedJson = parseDeployJsonContent(rawContent);
+            if (!parsedJson) {
+                skippedFiles.push({ filename: fileName, reason: 'invalid_json' });
                 return;
             }
-
-            if (!parsedJson || typeof parsedJson !== 'object') return;
 
             const server = detectServerFromDeployJson(fileName, parsedJson);
             const filename = stripJsonExtension(fileName) || `deploy_${fileIndex + 1}`;
@@ -1845,28 +2110,25 @@ const App = (() => {
             const flow = createFlowModel(server, {
                 id: generateFlowId(),
                 filename,
-                enabled: normalizeFlag(parsedJson.enabled, 1),
-                runat: String(parsedJson.runat || ''),
-                email: String(parsedJson.email || ''),
-                blackout: formatBlackoutForInput(parsedJson.blackout),
-                sms: formatSmsForInput(parsedJson.sms),
-                change: String(parsedJson.change || inferredFerrytChange || ''),
+                enabled: normalizeFlag(getDeployJsonValue(parsedJson, ['enabled'], 1), 1),
+                runat: String(getDeployJsonValue(parsedJson, ['runat'], '') || ''),
+                email: String(getDeployJsonValue(parsedJson, ['email'], '') || ''),
+                blackout: formatBlackoutForInput(getDeployJsonValue(parsedJson, ['blackout'], '')),
+                sms: formatSmsForInput(getDeployJsonValue(parsedJson, ['sms'], '')),
+                change: String(getDeployJsonValue(parsedJson, ['change'], '') || inferredFerrytChange || ''),
                 nodes: {},
                 connections: [],
                 interflowWaitfor: []
             });
 
-            const builds = parsedJson.builds && typeof parsedJson.builds === 'object'
-                ? parsedJson.builds
-                : (parsedJson.bilds && typeof parsedJson.bilds === 'object' ? parsedJson.bilds : {});
             const nodeNameMap = {};
 
-            Object.entries(builds).forEach(([nodeName, buildConfig], buildIndex) => {
+            getBuildEntries(parsedJson).forEach(([nodeName, buildConfig], buildIndex) => {
                 importedNodeCounter++;
                 const nodeId = 'node_' + importedNodeCounter;
                 const safeBuild = buildConfig && typeof buildConfig === 'object' ? buildConfig : {};
-                const params = sanitizeParams(safeBuild.params || {});
-                const buildId = String(safeBuild.buildid || '').trim();
+                const params = sanitizeParams(normalizeParamsSource(getObjectValueCaseInsensitive(safeBuild, ['params'])));
+                const buildId = String(getObjectValueCaseInsensitive(safeBuild, ['buildid', 'buildId', 'build_id']) || '').trim();
                 const runnerType = isTcSql(buildId)
                     ? 'sql'
                     : (isTcPowerShell(buildId) ? 'script' : (isTcRunOnly(buildId) ? 'runonly' : ''));
@@ -1875,11 +2137,11 @@ const App = (() => {
                     id: nodeId,
                     name: String(nodeName || `Build_${buildIndex + 1}`),
                     buildid: buildId,
-                    enabled: normalizeFlag(safeBuild.enabled, 1),
-                    waitfor: typeof safeBuild.waitfor === 'string' ? safeBuild.waitfor.trim() : '',
-                    retry: server === 'ferryt' ? '' : String(safeBuild.retry || ''),
-                    external: server === 'ferryt' ? '' : String(safeBuild.external || ''),
-                    stop: server === 'ferryt' ? '' : String(safeBuild.stop || ''),
+                    enabled: normalizeFlag(getObjectValueCaseInsensitive(safeBuild, ['enabled']), 1),
+                    waitfor: parseDelimitedNames(getObjectValueCaseInsensitive(safeBuild, ['waitfor'])).join(','),
+                    retry: server === 'ferryt' ? '' : String(getObjectValueCaseInsensitive(safeBuild, ['retry']) || ''),
+                    external: server === 'ferryt' ? '' : String(getObjectValueCaseInsensitive(safeBuild, ['external']) || ''),
+                    stop: server === 'ferryt' ? '' : String(getObjectValueCaseInsensitive(safeBuild, ['stop']) || ''),
                     ferrytType: '',
                     runnerType,
                     x: Math.max(30, 120 + (fileIndex % 3) * 28),
@@ -1918,12 +2180,15 @@ const App = (() => {
             importedOrder.push(flow.id);
             importedEntries.push({
                 flow,
-                rootWaitfor: parseDelimitedNames(parsedJson.waitfor)
+                rootWaitfor: parseDelimitedNames(getDeployJsonValue(parsedJson, ['waitfor'], ''))
             });
         });
 
         if (importedOrder.length === 0) {
-            throw new Error('Brak poprawnych plikow JSON do wczytania dla wybranej daty.');
+            const skippedMessage = getSkippedFilesMessage(skippedFiles);
+            throw new Error(skippedMessage
+                ? `Nie udalo sie wczytac zadnego pliku JSON. Pominiete: ${skippedMessage}`
+                : 'Brak poprawnych plikow JSON do wczytania dla wybranej daty.');
         }
 
         importedEntries.forEach(entry => {
@@ -1956,7 +2221,10 @@ const App = (() => {
         state.currentServer = preferredServer;
         state.currentFlowId = importedOrder.find(flowId => importedFlows[flowId].server === preferredServer) || importedOrder[0];
         saveState();
-        return importedOrder.length;
+        return {
+            importedCount: importedOrder.length,
+            skippedFiles
+        };
     }
 
     async function loadDeploysForDate() {
@@ -1978,7 +2246,7 @@ const App = (() => {
                 throw new Error(data.error || `Blad odczytu (${result.status})`);
             }
 
-            const importedCount = importDeployFiles(Array.isArray(data.files) ? data.files : [], exportDate);
+            const importResult = importDeployFiles(Array.isArray(data.files) ? data.files : [], exportDate);
             syncServerTabs();
             updateServerSpecificUI();
             renderFlowTabs();
@@ -1988,11 +2256,17 @@ const App = (() => {
             renderInterflowDeps();
             renderAllFilesList();
             updateExportDate(exportDate);
-            showToast(`Wczytano ${importedCount} plik(ow) JSON z daty ${exportDate}`, 'success');
+            showToast(`Wczytano ${importResult.importedCount} plik(ow) JSON z daty ${exportDate}`, 'success');
+            if (Array.isArray(importResult.skippedFiles) && importResult.skippedFiles.length > 0) {
+                showToast(`Pominieto ${importResult.skippedFiles.length} plik(ow): ${getSkippedFilesMessage(importResult.skippedFiles)}`, 'info');
+            }
             logEvent('JSON_LOAD_DEPLOY', {
                 exportDate,
                 directory: data.directory || `${AUTO_SAVE_ROOT}\\${exportDate}`,
-                count: importedCount,
+                count: importResult.importedCount,
+                skippedFiles: Array.isArray(importResult.skippedFiles)
+                    ? importResult.skippedFiles.map(item => item.filename)
+                    : [],
                 files: Array.isArray(data.files) ? data.files.map(file => file.filename) : []
             });
         } catch (error) {
