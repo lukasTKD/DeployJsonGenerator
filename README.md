@@ -56,6 +56,16 @@ Aplikacja webowa uruchamiana na IIS sluzy do przygotowania i edycji plikow JSON 
   - buildy,
   - `waitfor` miedzy buildami,
   - zaleznosci miedzy plikami JSON.
+- Import akceptuje nie tylko JSON-y wygenerowane przez te aplikacje, ale tez typowe warianty spotykane w katalogu deploy:
+  - pliki z `CRLF` albo `LF`,
+  - pliki z BOM,
+  - warianty z komentarzami `//` oraz `/* ... */`,
+  - warianty z koncowymi przecinkami,
+  - `builds` albo `bilds`,
+  - `waitfor` jako string albo tablica,
+  - `params` jako obiekt albo lista par klucz/wartosc,
+  - `tcserver` z lub bez `https://` i koncowego `/`.
+- Jesli czesc plikow z katalogu nie da sie zaimportowac, UI pokazuje komunikat o plikach pominietych zamiast przemilczec problem.
 
 ## 6. Obslugiwane serwery
 
@@ -194,6 +204,7 @@ Model zapisu:
 - frontend wysyla dane do `save-deploys.aspx`,
 - `save-deploys.aspx` uruchamia `save-deploys.ps1` przez `powershell.exe`,
 - skrypt PowerShell tworzy katalog daty i zapisuje pliki JSON.
+- JSON generowany przez UI jest formatowany z windowsowymi koncami linii `CRLF`, zeby odpowiadal typowym plikom deployowym z dysku.
 
 ## 13. Dostep do aplikacji
 

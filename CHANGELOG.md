@@ -2,6 +2,19 @@
 
 Wszystkie istotne zmiany w projekcie sa zapisywane tutaj.
 
+## [2026-03-15]
+
+### Changed
+
+- import JSON-ow z katalogu jest bardziej tolerancyjny i akceptuje popularne warianty formatowania oraz struktury plikow spoza generatora
+- generator zapisuje formatowany JSON z windowsowymi koncami linii `CRLF`
+
+### Fixed
+
+- wczytywanie plikow z komentarzami, BOM, koncowymi przecinkami oraz roznicami `CRLF/LF`
+- import wariantow z `builds` albo `bilds`, `waitfor` jako string lub tablica oraz `params` jako obiekt lub lista
+- komunikaty przy imporcie z daty: pomijane pliki sa teraz raportowane uzytkownikowi zamiast byc cicho ignorowane
+
 ## [2026-03-13]
 
 ### Added
