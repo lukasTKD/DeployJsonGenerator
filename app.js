@@ -11,6 +11,12 @@ const App = (() => {
         ferryt: 'https://teamcity.mbank.pl/'
     };
 
+    const SERVER_LABELS = {
+        haaTeamCity: 'haaTeamCity.mbank.pl',
+        teamcity: 'TeamCity.mbank.pl',
+        ferryt: 'Ferryt'
+    };
+
     const SQL_RUNNER_BUILD_ID = 'AutomateDeploy_SqlRunner';
     const SCRIPT_RUNNER_BUILD_ID = 'AutomateDeploy_ScriptRunner';
     const RUNONLY_BUILD_ID = 'AnsiblePlaybookRunner_ProdRunPlaybookAnsible';
@@ -674,7 +680,11 @@ const App = (() => {
 
     function syncServerTabs() {
         document.querySelectorAll('.server-tabs-container .tab').forEach(tab => {
-            tab.classList.toggle('active', tab.dataset.server === state.currentServer);
+            const server = tab.dataset.server;
+            const baseLabel = SERVER_LABELS[server] || server || '';
+            const count = getServerFlowCount(server);
+            tab.classList.toggle('active', server === state.currentServer);
+            tab.textContent = `${baseLabel} (${count})`;
         });
     }
 
@@ -696,6 +706,20 @@ const App = (() => {
         const flow = state.flows[state.currentFlowId];
         if (!flow || flow.server !== state.currentServer) return null;
         return flow;
+    }
+
+    function getServerFlowCount(server) {
+        return state.flowOrder
+            .map(id => state.flows[id])
+            .filter(flow => flow && flow.server === server)
+            .length;
+    }
+
+    function getAllFlowCount() {
+        return state.flowOrder
+            .map(id => state.flows[id])
+            .filter(Boolean)
+            .length;
     }
 
     function getServerFlows() {
@@ -1906,7 +1930,22 @@ const App = (() => {
     }
 
     function updateFlowCount() {
-        document.getElementById('flowCount').textContent = `Pliki JSON: ${getServerFlows().length}`;
+        const currentServerCount = getServerFlows().length;
+        const totalCount = getAllFlowCount();
+        syncServerTabs();
+        document.getElementById('flowCount').textContent = `Pliki JSON: ${totalCount} | biezacy serwer: ${currentServerCount}`;
+    }
+
+    function formatServerCountSummary(serverCounts) {
+        if (!serverCounts || typeof serverCounts !== 'object') return '';
+
+        return Object.keys(SERVER_LABELS)
+            .map(server => {
+                const count = Number(serverCounts[server] || 0);
+                return count > 0 ? `${SERVER_LABELS[server]}: ${count}` : '';
+            })
+            .filter(Boolean)
+            .join(', ');
     }
 
     // ========== SAVE / DOWNLOAD ==========
@@ -2093,6 +2132,11 @@ const App = (() => {
         const importedOrder = [];
         const importedEntries = [];
         const skippedFiles = [];
+        const serverCounts = {
+            haaTeamCity: 0,
+            teamcity: 0,
+            ferryt: 0
+        };
         let importedNodeCounter = 0;
 
         files.forEach((file, fileIndex) => {
@@ -2112,6 +2156,9 @@ const App = (() => {
             }
 
             const server = detectServerFromDeployJson(fileName, parsedJson);
+            if (Object.prototype.hasOwnProperty.call(serverCounts, server)) {
+                serverCounts[server]++;
+            }
             const filename = stripJsonExtension(fileName) || `deploy_${fileIndex + 1}`;
             const inferredFerrytChange = server === 'ferryt' && /^Ferryt_/i.test(filename)
                 ? filename.replace(/^Ferryt_/i, '')
@@ -2233,7 +2280,8 @@ const App = (() => {
         saveState();
         return {
             importedCount: importedOrder.length,
-            skippedFiles
+            skippedFiles,
+            serverCounts
         };
     }
 
@@ -2266,7 +2314,11 @@ const App = (() => {
             renderInterflowDeps();
             renderAllFilesList();
             updateExportDate(exportDate);
-            showToast(`Wczytano ${importResult.importedCount} plik(ow) JSON z daty ${exportDate}`, 'success');
+            const serverCountSummary = formatServerCountSummary(importResult.serverCounts);
+            showToast(
+                `Wczytano ${importResult.importedCount} plik(ow) JSON z daty ${exportDate}${serverCountSummary ? ` (${serverCountSummary})` : ''}`,
+                'success'
+            );
             if (Array.isArray(importResult.skippedFiles) && importResult.skippedFiles.length > 0) {
                 showToast(`Pominieto ${importResult.skippedFiles.length} plik(ow): ${getSkippedFilesMessage(importResult.skippedFiles)}`, 'info');
             }
