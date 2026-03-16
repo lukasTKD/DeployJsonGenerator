@@ -1,4 +1,5 @@
 <%@ Page Language="C#" %>
+<%@ Import Namespace="System.Collections.Generic" %>
 <%@ Import Namespace="System" %>
 <%@ Import Namespace="System.IO" %>
 <%@ Import Namespace="System.Linq" %>
@@ -53,22 +54,43 @@
                 return;
             }
 
-            var files = Directory
-                .GetFiles(targetDir, "*.json", SearchOption.TopDirectoryOnly)
-                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-                .Select(path => new
+            var files = new List<object>();
+            var readErrors = new List<object>();
+
+            foreach (var path in Directory
+                .EnumerateFiles(targetDir, "*.json", SearchOption.AllDirectories)
+                .OrderBy(filePath => GetRelativePath(targetDir, filePath), StringComparer.OrdinalIgnoreCase))
+            {
+                var relativePath = GetRelativePath(targetDir, path);
+
+                try
                 {
-                    filename = Path.GetFileName(path),
-                    content = File.ReadAllText(path, Encoding.UTF8)
-                })
-                .ToArray();
+                    files.Add(new
+                    {
+                        filename = Path.GetFileName(path),
+                        relativePath,
+                        content = ReadFileText(path)
+                    });
+                }
+                catch (Exception fileEx)
+                {
+                    readErrors.Add(new
+                    {
+                        filename = Path.GetFileName(path),
+                        relativePath,
+                        error = fileEx.Message
+                    });
+                }
+            }
 
             WriteJson(new
             {
                 ok = true,
                 directory = targetDir,
-                count = files.Length,
-                files
+                count = files.Count,
+                totalFound = files.Count + readErrors.Count,
+                files = files.ToArray(),
+                readErrors = readErrors.ToArray()
             }, 200);
         }
         catch (Exception ex)
@@ -89,5 +111,30 @@
         Response.ContentEncoding = Encoding.UTF8;
         Response.TrySkipIisCustomErrors = true;
         Response.Write(_serializer.Serialize(data));
+    }
+
+    private string ReadFileText(string path)
+    {
+        using (var reader = new StreamReader(path, Encoding.UTF8, true))
+        {
+            return reader.ReadToEnd();
+        }
+    }
+
+    private string GetRelativePath(string rootDir, string fullPath)
+    {
+        if (string.IsNullOrEmpty(rootDir) || string.IsNullOrEmpty(fullPath))
+        {
+            return Path.GetFileName(fullPath) ?? "";
+        }
+
+        if (!fullPath.StartsWith(rootDir, StringComparison.OrdinalIgnoreCase))
+        {
+            return Path.GetFileName(fullPath) ?? fullPath;
+        }
+
+        return fullPath
+            .Substring(rootDir.Length)
+            .TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
     }
 </script>

@@ -2017,9 +2017,14 @@ const App = (() => {
         return {};
     }
 
+    function getSkippedFileLabel(item) {
+        return String((item && (item.relativePath || item.filename)) || '')
+            .trim();
+    }
+
     function getSkippedFilesMessage(skippedFiles) {
         if (!Array.isArray(skippedFiles) || skippedFiles.length === 0) return '';
-        const skippedNames = skippedFiles.map(item => item.filename).filter(Boolean);
+        const skippedNames = skippedFiles.map(getSkippedFileLabel).filter(Boolean);
         if (skippedNames.length === 0) return '';
         if (skippedNames.length <= 3) {
             return skippedNames.join(', ');
@@ -2091,13 +2096,18 @@ const App = (() => {
         let importedNodeCounter = 0;
 
         files.forEach((file, fileIndex) => {
+            const relativePath = String(file && file.relativePath ? file.relativePath : '').trim();
             const fileName = String(file && file.filename ? file.filename : '').trim();
             const rawContent = normalizeJsonFileContent(file && file.content ? file.content : '');
-            if (!fileName || !rawContent) return;
+            if (!fileName) return;
+            if (!rawContent) {
+                skippedFiles.push({ filename: fileName, relativePath, reason: 'empty_content' });
+                return;
+            }
 
             const parsedJson = parseDeployJsonContent(rawContent);
             if (!parsedJson) {
-                skippedFiles.push({ filename: fileName, reason: 'invalid_json' });
+                skippedFiles.push({ filename: fileName, relativePath, reason: 'invalid_json' });
                 return;
             }
 
@@ -2260,12 +2270,18 @@ const App = (() => {
             if (Array.isArray(importResult.skippedFiles) && importResult.skippedFiles.length > 0) {
                 showToast(`Pominieto ${importResult.skippedFiles.length} plik(ow): ${getSkippedFilesMessage(importResult.skippedFiles)}`, 'info');
             }
+            if (Array.isArray(data.readErrors) && data.readErrors.length > 0) {
+                showToast(`Nie odczytano ${data.readErrors.length} plik(ow): ${getSkippedFilesMessage(data.readErrors)}`, 'info');
+            }
             logEvent('JSON_LOAD_DEPLOY', {
                 exportDate,
                 directory: data.directory || `${AUTO_SAVE_ROOT}\\${exportDate}`,
                 count: importResult.importedCount,
                 skippedFiles: Array.isArray(importResult.skippedFiles)
-                    ? importResult.skippedFiles.map(item => item.filename)
+                    ? importResult.skippedFiles.map(getSkippedFileLabel)
+                    : [],
+                readErrors: Array.isArray(data.readErrors)
+                    ? data.readErrors.map(getSkippedFileLabel)
                     : [],
                 files: Array.isArray(data.files) ? data.files.map(file => file.filename) : []
             });
