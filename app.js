@@ -92,8 +92,7 @@ const App = (() => {
             artifactoryFolder: 'RenewApplication',
             packageField: 'RenewAppFileNameTC',
             fields: [
-                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' },
-                { key: 'RenewAppTC', label: 'RenewAppTC', required: true, type: 'text' }
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' }
             ]
         },
         {
@@ -102,8 +101,7 @@ const App = (() => {
             artifactoryFolder: 'sql',
             packageField: 'RenewAppFileNameTC',
             fields: [
-                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' },
-                { key: 'RenewAppSQLTC', label: 'RenewAppSQLTC', required: true, type: 'text' }
+                { key: 'RenewAppFileNameTC', label: 'RenewAppFileNameTC', required: true, type: 'text' }
             ]
         },
         {
@@ -482,6 +480,22 @@ const App = (() => {
         syncFerrytFilename(flow);
     }
 
+    function applyFerrytAutoParams(buildType, params = {}) {
+        const effectiveType = FERRYT_RENEW_TYPES.includes(buildType) ? buildType : '';
+        const nextParams = sanitizeParams({ ...(params || {}) });
+
+        delete nextParams.RenewAppTC;
+        delete nextParams.RenewAppSQLTC;
+
+        if (effectiveType === 'RenewApplication File') {
+            nextParams.RenewAppTC = '1';
+        } else if (effectiveType === 'RenewApplication SQL') {
+            nextParams.RenewAppSQLTC = '1';
+        }
+
+        return nextParams;
+    }
+
     function normalizeFerrytNode(node) {
         if (!node) return;
 
@@ -525,8 +539,9 @@ const App = (() => {
         }
 
         node.ferrytType = ferrytType;
-        if (Object.keys(params).length > 0) {
-            node.params = params;
+        const normalizedParams = applyFerrytAutoParams(ferrytType, params);
+        if (Object.keys(normalizedParams).length > 0) {
+            node.params = normalizedParams;
         } else {
             delete node.params;
         }
@@ -1559,7 +1574,10 @@ const App = (() => {
         // Save TC params
         saveTcParams(node, tcValidation.params);
         if (isFerrytServer() && activeFerrytType) {
-            const ferrytParams = sanitizeParams(getFerrytParamsFromModal(activeFerrytType).params);
+            const ferrytParams = applyFerrytAutoParams(
+                activeFerrytType,
+                getFerrytParamsFromModal(activeFerrytType).params
+            );
             if (Object.keys(ferrytParams).length > 0) {
                 node.params = ferrytParams;
             } else {
@@ -1732,7 +1750,9 @@ const App = (() => {
             if (!isFerrytServer(flow.server) && node.external) build.external = node.external;
             if (!isFerrytServer(flow.server) && node.stop) build.stop = node.stop;
             // TC params
-            const sanitizedParams = sanitizeParams(node.params || {});
+            const sanitizedParams = isFerrytServer(flow.server)
+                ? applyFerrytAutoParams(node.ferrytType, node.params || {})
+                : sanitizeParams(node.params || {});
             if (Object.keys(sanitizedParams).length > 0) {
                 build.params = sanitizedParams;
             }
