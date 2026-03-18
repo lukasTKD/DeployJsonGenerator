@@ -48,9 +48,10 @@
                 WriteJson(new
                 {
                     ok = false,
-                    error = "Nie znaleziono katalogu dla wybranej daty.",
-                    directory = targetDir
-                }, 404);
+                    error = "Brak katalogu dla daty " + exportDate + ".",
+                    directory = targetDir,
+                    exportDate = exportDate
+                }, 200);
                 return;
             }
 

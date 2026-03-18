@@ -2310,6 +2310,7 @@ const App = (() => {
     }
 
     async function loadDeploysForDate() {
+        const loadToastDurationMs = 45000;
         const exportDate = state.exportDate || getTodayIsoDate();
         if (!/^\d{4}-\d{2}-\d{2}$/.test(exportDate)) {
             showToast('Ustaw poprawna date instalacji', 'error');
@@ -2339,15 +2340,24 @@ const App = (() => {
             renderAllFilesList();
             updateExportDate(exportDate);
             const serverCountSummary = formatServerCountSummary(importResult.serverCounts);
-            showToast(
+            showToastWithDuration(
                 `Wczytano ${importResult.importedCount} plik(ow) JSON z daty ${exportDate}${serverCountSummary ? ` (${serverCountSummary})` : ''}`,
-                'success'
+                'success',
+                loadToastDurationMs
             );
             if (Array.isArray(importResult.skippedFiles) && importResult.skippedFiles.length > 0) {
-                showToast(`Pominieto ${importResult.skippedFiles.length} plik(ow): ${getSkippedFilesMessage(importResult.skippedFiles)}`, 'info');
+                showToastWithDuration(
+                    `Pominieto ${importResult.skippedFiles.length} plik(ow): ${getSkippedFilesMessage(importResult.skippedFiles)}`,
+                    'info',
+                    loadToastDurationMs
+                );
             }
             if (Array.isArray(data.readErrors) && data.readErrors.length > 0) {
-                showToast(`Nie odczytano ${data.readErrors.length} plik(ow): ${getSkippedFilesMessage(data.readErrors)}`, 'info');
+                showToastWithDuration(
+                    `Nie odczytano ${data.readErrors.length} plik(ow): ${getSkippedFilesMessage(data.readErrors)}`,
+                    'info',
+                    loadToastDurationMs
+                );
             }
             logEvent('JSON_LOAD_DEPLOY', {
                 exportDate,
@@ -2362,7 +2372,11 @@ const App = (() => {
                 files: Array.isArray(data.files) ? data.files.map(file => file.filename) : []
             });
         } catch (error) {
-            showToast(`Wczytanie nieudane: ${error && error.message ? error.message : 'Brak odpowiedzi z endpointu odczytu.'}`, 'error');
+            showToastWithDuration(
+                `Wczytanie nieudane: ${error && error.message ? error.message : 'Brak odpowiedzi z endpointu odczytu.'}`,
+                'error',
+                loadToastDurationMs
+            );
         } finally {
             setLoadDeployBusy(false);
         }
@@ -2536,11 +2550,15 @@ const App = (() => {
     }
 
     function showToast(message, type) {
+        return showToastWithDuration(message, type, 3000);
+    }
+
+    function showToastWithDuration(message, type, durationMs) {
         const toast = document.createElement('div');
         toast.className = `toast ${type || 'info'}`;
         toast.textContent = message;
         document.body.appendChild(toast);
-        setTimeout(() => toast.remove(), 3000);
+        setTimeout(() => toast.remove(), Math.max(0, Number(durationMs) || 3000));
     }
 
     function updateAutoSaveStatus(message, isError = false, title = '') {
