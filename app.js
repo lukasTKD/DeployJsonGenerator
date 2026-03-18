@@ -25,7 +25,11 @@ const App = (() => {
     const DUPLICATE_ALLOWED_BUILD_IDS = [
         'AutomateDeploy_SqlRunner',
         'AutomateDeploy_ScriptRunner',
-        'AnsiblePlaybookRunner_ProdRunPlaybookAnsible'
+        'AnsiblePlaybookRunner_ProdRunPlaybookAnsible',
+        'DEIZUKC_Ferryt_BpmProcessesMigrations_Sql_ProdDeployment',
+        'DEIZUKC_Ferryt_BpmProcessesMigrations_SVAutoImport_ProdDeployment',
+        'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW',
+        'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment'
     ];
     const FERRYT_RENEW_PLACEHOLDER = 'Renew';
     const FERRYT_RENEW_BUILD_ID = 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment';
@@ -3133,4 +3137,5 @@ const App = (() => {
     };
 })();
 
+window.App = App;
 document.addEventListener('DOMContentLoaded', App.init);
