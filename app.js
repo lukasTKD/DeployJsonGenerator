@@ -32,6 +32,8 @@ const App = (() => {
         'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment'
     ];
     const FERRYT_RENEW_PLACEHOLDER = 'Renew';
+    const FERRYT_RESTART_SERVICES_TYPE = 'Restart serwisow';
+    const FERRYT_RESTART_SERVICES_LEGACY_TYPE = 'Restart serwisów';
     const FERRYT_RENEW_BUILD_ID = 'DEIZUKC_Ferryt_BpmProcessesMigrations_RenewApplication_ProdDeployment';
 
     const FERRYT_DEFAULTS = {
@@ -68,7 +70,7 @@ const App = (() => {
             ]
         },
         {
-            buildType: 'Restart serwisów',
+            buildType: FERRYT_RESTART_SERVICES_TYPE,
             buildId: 'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW',
             fields: [
                 {
@@ -126,7 +128,7 @@ const App = (() => {
     const FERRYT_TOOLBAR_ITEMS = [
         { label: 'SQL', buildType: 'SQL' },
         { label: 'SVAutoImport', buildType: 'SVAutoImport' },
-        { label: 'Restart serwisów', buildType: 'Restart serwisów' },
+        { label: FERRYT_RESTART_SERVICES_TYPE, buildType: FERRYT_RESTART_SERVICES_TYPE },
         { label: 'BPM', buildType: 'BPM' },
         { label: 'Renew', buildType: FERRYT_RENEW_PLACEHOLDER }
     ];
@@ -460,8 +462,26 @@ const App = (() => {
         return server === 'ferryt';
     }
 
+    function normalizeFerrytBuildType(buildType) {
+        return buildType === FERRYT_RESTART_SERVICES_LEGACY_TYPE
+            ? FERRYT_RESTART_SERVICES_TYPE
+            : (buildType || '');
+    }
+
+    function normalizeFerrytNodeName(name, ferrytType) {
+        if (
+            normalizeFerrytBuildType(ferrytType) === FERRYT_RESTART_SERVICES_TYPE &&
+            String(name || '').trim() === FERRYT_RESTART_SERVICES_LEGACY_TYPE
+        ) {
+            return FERRYT_RESTART_SERVICES_TYPE;
+        }
+
+        return String(name || '').trim();
+    }
+
     function getFerrytCatalogItem(buildType) {
-        return FERRYT_BUILD_CATALOG.find(item => item.buildType === buildType) || null;
+        const normalizedBuildType = normalizeFerrytBuildType(buildType);
+        return FERRYT_BUILD_CATALOG.find(item => item.buildType === normalizedBuildType) || null;
     }
 
     function isFerrytRenewType(buildType) {
@@ -470,7 +490,7 @@ const App = (() => {
 
     function getFerrytEffectiveType(buildType = editingFerrytType) {
         if (!isFerrytRenewType(buildType)) {
-            return buildType || '';
+            return normalizeFerrytBuildType(buildType);
         }
 
         return FERRYT_RENEW_TYPES.includes(editingFerrytType) ? editingFerrytType : '';
@@ -504,7 +524,7 @@ const App = (() => {
         if (!node) return;
 
         const params = sanitizeParams({ ...(node.params || {}) });
-        let ferrytType = node.ferrytType || '';
+        let ferrytType = normalizeFerrytBuildType(node.ferrytType || '');
 
         if (params.buildPropertyName) {
             const dynamicKey = params.buildPropertyName;
@@ -530,7 +550,7 @@ const App = (() => {
             } else if ('ImportProcessPackageName' in params) {
                 ferrytType = 'SVAutoImport';
             } else if ('todo' in params || node.buildid === 'DEIZUKC_Deihaatools_Ferryt_Prod_FerrytRestartSerwisW') {
-                ferrytType = 'Restart serwisów';
+                ferrytType = FERRYT_RESTART_SERVICES_TYPE;
             } else if ('RenewAppFileNameTC' in params && 'RenewAppSQLTC' in params) {
                 ferrytType = 'RenewApplication SQL';
             } else if ('RenewAppFileNameTC' in params && 'RenewAppTC' in params) {
@@ -1454,7 +1474,9 @@ const App = (() => {
             editingFerrytType = node.ferrytType || '';
         }
 
-        document.getElementById('nodeEditName').value = node.name || '';
+        document.getElementById('nodeEditName').value = isFerrytServer()
+            ? normalizeFerrytNodeName(node.name, node.ferrytType)
+            : (node.name || '');
         document.getElementById('nodeEditBuildId').value = node.buildid || '';
         document.getElementById('nodeEditEnabled').value = node.enabled;
         document.getElementById('nodeEditWaitfor').value = node.waitfor || '';
@@ -1514,7 +1536,7 @@ const App = (() => {
         if (!flow || !state.editingNodeId) return;
         const node = flow.nodes[state.editingNodeId];
         const oldName = node.name;
-        const newName = document.getElementById('nodeEditName').value.trim() || node.name;
+        const rawNewName = document.getElementById('nodeEditName').value.trim();
         const newBuildId = document.getElementById('nodeEditBuildId').value.trim();
 
         // Validate name uniqueness
@@ -1537,6 +1559,9 @@ const App = (() => {
         }
 
         const activeFerrytType = isFerrytServer() ? getFerrytEffectiveType(node.ferrytType) : '';
+        const newName = isFerrytServer()
+            ? (normalizeFerrytNodeName(rawNewName || node.name, activeFerrytType || node.ferrytType) || node.name)
+            : (rawNewName || node.name);
         if (isFerrytServer() && isFerrytRenewType(node.ferrytType) && !activeFerrytType) {
             showValidationError('nodeEditFerrytRenewType', 'Wybierz typ Renew');
             return;
