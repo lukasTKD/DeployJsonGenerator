@@ -1538,6 +1538,10 @@ const App = (() => {
         const oldName = node.name;
         const rawNewName = document.getElementById('nodeEditName').value.trim();
         const newBuildId = document.getElementById('nodeEditBuildId').value.trim();
+        const activeFerrytType = isFerrytServer() ? getFerrytEffectiveType(node.ferrytType) : '';
+        const newName = isFerrytServer()
+            ? (normalizeFerrytNodeName(rawNewName || node.name, activeFerrytType || node.ferrytType) || node.name)
+            : (rawNewName || node.name);
 
         // Validate name uniqueness
         const nameError = validateNodeName(flow, newName, state.editingNodeId);
@@ -1558,10 +1562,6 @@ const App = (() => {
             return;
         }
 
-        const activeFerrytType = isFerrytServer() ? getFerrytEffectiveType(node.ferrytType) : '';
-        const newName = isFerrytServer()
-            ? (normalizeFerrytNodeName(rawNewName || node.name, activeFerrytType || node.ferrytType) || node.name)
-            : (rawNewName || node.name);
         if (isFerrytServer() && isFerrytRenewType(node.ferrytType) && !activeFerrytType) {
             showValidationError('nodeEditFerrytRenewType', 'Wybierz typ Renew');
             return;
