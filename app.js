@@ -2633,6 +2633,7 @@ const App = (() => {
     }
 
     function loadState() {
+        state.exportDate = getTodayIsoDate();
         try {
             const data = JSON.parse(localStorage.getItem(getStorageKey()));
             if (data && data.flows && Object.keys(data.flows).length > 0) {
@@ -2651,7 +2652,6 @@ const App = (() => {
                 state.flowOrder = sanitizedFlowOrder;
                 state.currentFlowId = sanitizedFlows[data.currentFlowId] ? data.currentFlowId : sanitizedFlowOrder[0] || null;
                 state.nodeCounter = data.nodeCounter || 0;
-                state.exportDate = /^\d{4}-\d{2}-\d{2}$/.test(data.exportDate || '') ? data.exportDate : getTodayIsoDate();
 
                 Object.values(state.flows).forEach(flow => {
                     if (Array.isArray(flow.interflowWaitfor)) {
@@ -3115,9 +3115,6 @@ const App = (() => {
     async function init() {
         await fetchUsername();
         const loaded = loadState();
-        if (!state.exportDate) {
-            state.exportDate = getTodayIsoDate();
-        }
         if (!loaded) {
             addFlow();
         } else {
