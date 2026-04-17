@@ -177,10 +177,52 @@ const App = (() => {
             return value.reduce((result, item) => result.concat(parseDelimitedNames(item)), []);
         }
         if (typeof value !== 'string') return [];
-        return value
+        return [...new Set(value
             .split(',')
             .map(item => stripJsonExtension(item).trim())
-            .filter(Boolean);
+            .filter(Boolean))];
+    }
+
+    function getNodeWaitforList(node) {
+        if (!node) return [];
+        return parseDelimitedNames(node.waitfor);
+    }
+
+    function setNodeWaitforList(node, names) {
+        if (!node) return;
+        const normalizedNames = parseDelimitedNames(names);
+        node.waitfor = normalizedNames.join(', ');
+    }
+
+    function addNodeWaitfor(node, dependencyName) {
+        if (!node) return;
+        const normalizedDependency = stripJsonExtension(dependencyName).trim();
+        if (!normalizedDependency) return;
+        const dependencies = getNodeWaitforList(node);
+        if (dependencies.includes(normalizedDependency)) return;
+        dependencies.push(normalizedDependency);
+        setNodeWaitforList(node, dependencies);
+    }
+
+    function removeNodeWaitfor(node, dependencyName) {
+        if (!node) return;
+        const normalizedDependency = stripJsonExtension(dependencyName).trim();
+        if (!normalizedDependency) return;
+        setNodeWaitforList(
+            node,
+            getNodeWaitforList(node).filter(name => name !== normalizedDependency)
+        );
+    }
+
+    function replaceNodeWaitfor(node, oldDependencyName, newDependencyName) {
+        if (!node) return;
+        const oldName = stripJsonExtension(oldDependencyName).trim();
+        const newName = stripJsonExtension(newDependencyName).trim();
+        if (!oldName || !newName) return;
+        setNodeWaitforList(
+            node,
+            getNodeWaitforList(node).map(name => name === oldName ? newName : name)
+        );
     }
 
     function normalizeJsonFileContent(value) {
@@ -1109,7 +1151,7 @@ const App = (() => {
             name: config.name || ('Build_' + state.nodeCounter),
             buildid: config.buildid || '',
             enabled: config.enabled ?? 1,
-            waitfor: config.waitfor || '',
+            waitfor: '',
             retry: !isFerrytServer(flow.server) ? (config.retry ?? '1') : '',
             external: !isFerrytServer(flow.server) ? (config.external || '') : '',
             stop: config.stop || '',
@@ -1119,6 +1161,7 @@ const App = (() => {
             y: position.y,
             params: config.params && Object.keys(sanitizeParams(config.params)).length > 0 ? sanitizeParams(config.params) : undefined
         };
+        setNodeWaitforList(flow.nodes[nodeId], config.waitfor || []);
 
         renderCanvas();
         updateJsonPreview();
@@ -1165,7 +1208,7 @@ const App = (() => {
             c => c.from !== nodeId && c.to !== nodeId
         );
         Object.values(flow.nodes).forEach(n => {
-            if (n.waitfor === deletedName) n.waitfor = '';
+            removeNodeWaitfor(n, deletedName);
         });
         delete flow.nodes[nodeId];
         renderCanvas();
@@ -1201,7 +1244,7 @@ const App = (() => {
         );
         // Update waitfor references
         Object.values(flow.nodes).forEach(n => {
-            if (n.waitfor === deletedName) n.waitfor = '';
+            removeNodeWaitfor(n, deletedName);
         });
         delete flow.nodes[nodeId];
         closeNodeModal();
@@ -1346,8 +1389,8 @@ const App = (() => {
         if (conn) {
             const toNode = flow.nodes[conn.to];
             const fromNode = flow.nodes[conn.from];
-            if (toNode && fromNode && toNode.waitfor === fromNode.name) {
-                toNode.waitfor = '';
+            if (toNode && fromNode) {
+                removeNodeWaitfor(toNode, fromNode.name);
             }
         }
         flow.connections.splice(index, 1);
@@ -1444,7 +1487,7 @@ const App = (() => {
         const fromNode = flow.nodes[fromId];
         const toNode = flow.nodes[toId];
         if (fromNode && toNode) {
-            toNode.waitfor = fromNode.name;
+            addNodeWaitfor(toNode, fromNode.name);
         }
 
         renderConnections();
@@ -1479,7 +1522,7 @@ const App = (() => {
             : (node.name || '');
         document.getElementById('nodeEditBuildId').value = node.buildid || '';
         document.getElementById('nodeEditEnabled').value = node.enabled;
-        document.getElementById('nodeEditWaitfor').value = node.waitfor || '';
+        document.getElementById('nodeEditWaitfor').value = getNodeWaitforList(node).join(', ');
         document.getElementById('nodeEditRetry').value = node.retry || '';
         document.getElementById('nodeEditExternal').value = node.external || '';
         document.getElementById('nodeEditStop').value = node.stop || '';
@@ -1619,7 +1662,7 @@ const App = (() => {
         // Update waitfor references if name changed
         if (oldName !== newName) {
             Object.values(flow.nodes).forEach(n => {
-                if (n.waitfor === oldName) n.waitfor = newName;
+                replaceNodeWaitfor(n, oldName, newName);
             });
         }
 
@@ -1772,7 +1815,12 @@ const App = (() => {
         const orderedNodes = getOrderedNodes(flow);
         orderedNodes.forEach(node => {
             const build = {};
-            if (node.waitfor) build.waitfor = node.waitfor;
+            const nodeWaitfor = getNodeWaitforList(node);
+            if (nodeWaitfor.length === 1) {
+                build.waitfor = nodeWaitfor[0];
+            } else if (nodeWaitfor.length > 1) {
+                build.waitfor = nodeWaitfor;
+            }
             build.enabled = node.enabled;
             build.buildid = node.buildid || 'NAZWA_BUILDA';
             if (!isFerrytServer(flow.server) && node.retry) build.retry = node.retry;
@@ -2244,7 +2292,7 @@ const App = (() => {
                     name: String(nodeName || `Build_${buildIndex + 1}`),
                     buildid: buildId,
                     enabled: normalizeFlag(getObjectValueCaseInsensitive(safeBuild, ['enabled']), 1),
-                    waitfor: parseDelimitedNames(getObjectValueCaseInsensitive(safeBuild, ['waitfor'])).join(','),
+                    waitfor: '',
                     retry: server === 'ferryt' ? '' : String(getObjectValueCaseInsensitive(safeBuild, ['retry']) || ''),
                     external: server === 'ferryt' ? '' : String(getObjectValueCaseInsensitive(safeBuild, ['external']) || ''),
                     stop: server === 'ferryt' ? '' : String(getObjectValueCaseInsensitive(safeBuild, ['stop']) || ''),
@@ -2262,24 +2310,27 @@ const App = (() => {
                     normalizeFerrytNode(node);
                 }
 
+                setNodeWaitforList(node, getObjectValueCaseInsensitive(safeBuild, ['waitfor']));
                 flow.nodes[nodeId] = node;
                 nodeNameMap[node.name] = nodeId;
             });
 
             Object.values(flow.nodes).forEach(node => {
-                const dependencies = parseDelimitedNames(node.waitfor);
+                const dependencies = getNodeWaitforList(node);
                 if (dependencies.length === 0) {
-                    node.waitfor = '';
+                    setNodeWaitforList(node, []);
                     return;
                 }
 
-                const dependencyId = nodeNameMap[dependencies[0]];
-                node.waitfor = dependencies[0];
+                setNodeWaitforList(node, dependencies);
 
-                if (!dependencyId || dependencyId === node.id) return;
-                if (!flow.connections.some(connection => connection.from === dependencyId && connection.to === node.id)) {
-                    flow.connections.push({ from: dependencyId, to: node.id });
-                }
+                dependencies.forEach(dependencyName => {
+                    const dependencyId = nodeNameMap[dependencyName];
+                    if (!dependencyId || dependencyId === node.id) return;
+                    if (!flow.connections.some(connection => connection.from === dependencyId && connection.to === node.id)) {
+                        flow.connections.push({ from: dependencyId, to: node.id });
+                    }
+                });
             });
 
             importedFlows[flow.id] = flow;

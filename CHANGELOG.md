@@ -2,6 +2,12 @@
 
 Wszystkie istotne zmiany w projekcie sa zapisywane tutaj.
 
+## [2026-04-17]
+
+### Fixed
+
+- build-level `waitfor` nie jest juz ograniczony do jednej zaleznosci; generator poprawnie importuje, utrzymuje i eksportuje wiele zaleznosci dla jednego builda
+
 ## [2026-03-15]
 
 ### Changed

@@ -104,7 +104,7 @@ Node na diagramie zawiera m.in.:
 - `name`
 - `buildid`
 - `enabled`
-- `waitfor`
+- `waitfor` (jedna albo wiele zaleznosci)
 - `retry`
 - `external`
 - `stop`
@@ -115,7 +115,9 @@ Node na diagramie zawiera m.in.:
 ### 8.1 Miedzy buildami
 
 - przeciagnij polaczenie z jednego node'a na drugi,
-- docelowy node dostanie `waitfor` wskazujacy poprzedni build.
+- docelowy node dostanie `waitfor` wskazujacy poprzedni build,
+- jeden build moze czekac na wiele innych buildow,
+- w JSON `waitfor` jest zapisywany jako string dla jednej zaleznosci albo tablica dla wielu.
 
 ### 8.2 Miedzy plikami JSON
 
