@@ -172,6 +172,10 @@ const App = (() => {
         return String(value || '').trim().replace(/\.json$/i, '');
     }
 
+    function getSafeDeployFilenameBase(value) {
+        return sanitizeWindowsFileName(stripJsonExtension(value)) || 'deploy';
+    }
+
     function parseDelimitedNames(value) {
         if (Array.isArray(value)) {
             return value.reduce((result, item) => result.concat(parseDelimitedNames(item)), []);
@@ -650,6 +654,7 @@ const App = (() => {
         const flow = {
             id: overrides.id || generateFlowId(),
             filename: ferryt ? 'Ferryt_' : 'deploy_' + (state.flowOrder.length + 1),
+            savedFilename: '',
             server,
             enabled: 1,
             runat: ferryt ? FERRYT_DEFAULTS.runat : '18:00',
@@ -664,6 +669,7 @@ const App = (() => {
 
         Object.assign(flow, overrides);
         flow.server = server;
+        flow.savedFilename = stripJsonExtension(flow.savedFilename || '');
         flow.nodes = overrides.nodes || {};
         flow.connections = Array.isArray(overrides.connections) ? overrides.connections : [];
         flow.interflowWaitfor = Array.isArray(overrides.interflowWaitfor) ? overrides.interflowWaitfor : [];
@@ -2264,6 +2270,7 @@ const App = (() => {
             const flow = createFlowModel(server, {
                 id: generateFlowId(),
                 filename,
+                savedFilename: filename,
                 enabled: normalizeFlag(getDeployJsonValue(parsedJson, ['enabled'], 1), 1),
                 runat: String(getDeployJsonValue(parsedJson, ['runat'], '') || ''),
                 email: String(getDeployJsonValue(parsedJson, ['email'], '') || ''),
@@ -2475,12 +2482,18 @@ const App = (() => {
             if (!result.ok || !data.ok) {
                 throw new Error(data.error || `Blad zapisu (${result.status})`);
             }
+            files.forEach(file => {
+                if (!file || !file.flowId || !state.flows[file.flowId]) return;
+                state.flows[file.flowId].savedFilename = stripJsonExtension(file.filename || '');
+            });
+            saveState();
             showToast(successMessage || 'Plik zapisany', 'success');
             logEvent(logType, {
                 ...logDetails,
                 exportDate,
                 directory: data.directory || `${AUTO_SAVE_ROOT}\\${exportDate}`,
                 count: data.saved || files.length,
+                deletedFiles: Array.isArray(data.deletedFiles) ? data.deletedFiles : [],
                 files: Array.isArray(data.files) && data.files.length > 0
                     ? data.files
                     : files.map(file => file.filename)
@@ -2495,11 +2508,19 @@ const App = (() => {
     function getFlowDeployFile(flow) {
         if (!flow) return null;
         applyFerrytFlowDefaults(flow);
-        const safeName = sanitizeWindowsFileName(flow.filename || 'deploy') || 'deploy';
-        return {
+        const safeName = getSafeDeployFilenameBase(flow.filename);
+        const savedName = stripJsonExtension(flow.savedFilename || '');
+        const file = {
+            flowId: flow.id,
             filename: `${safeName}.json`,
             content: formatJson(generateJson(flow))
         };
+
+        if (savedName && savedName.toLowerCase() !== safeName.toLowerCase()) {
+            file.previousFilename = `${savedName}.json`;
+        }
+
+        return file;
     }
 
     async function saveCurrentJsonToDeploy() {
@@ -2705,6 +2726,7 @@ const App = (() => {
                 state.nodeCounter = data.nodeCounter || 0;
 
                 Object.values(state.flows).forEach(flow => {
+                    flow.savedFilename = stripJsonExtension(flow.savedFilename || flow.filename || '');
                     if (Array.isArray(flow.interflowWaitfor)) {
                         flow.interflowWaitfor = flow.interflowWaitfor.filter(id => state.flows[id] && state.flows[id].server === flow.server);
                     } else if (typeof flow.waitfor === 'string' && flow.waitfor.trim()) {

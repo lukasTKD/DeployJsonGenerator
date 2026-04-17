@@ -68,6 +68,7 @@ try {
     }
 
     $savedFiles = New-Object System.Collections.Generic.List[string]
+    $deletedFiles = New-Object System.Collections.Generic.List[string]
     foreach ($file in $payload.files) {
         $fileName = [System.IO.Path]::GetFileName(([string]$file.filename).Trim())
         if ([string]::IsNullOrWhiteSpace($fileName)) {
@@ -81,6 +82,21 @@ try {
         $targetFile = Join-Path $targetDir $fileName
         [System.IO.File]::WriteAllText($targetFile, ([string]$file.content), (New-Object System.Text.UTF8Encoding($false)))
         $savedFiles.Add($fileName) | Out-Null
+
+        $previousFileName = [System.IO.Path]::GetFileName(([string]$file.previousFilename).Trim())
+        if (-not [string]::IsNullOrWhiteSpace($previousFileName)) {
+            if (-not $previousFileName.EndsWith('.json', [System.StringComparison]::OrdinalIgnoreCase)) {
+                $previousFileName += '.json'
+            }
+
+            if (-not [string]::Equals($previousFileName, $fileName, [System.StringComparison]::OrdinalIgnoreCase)) {
+                $previousFile = Join-Path $targetDir $previousFileName
+                if (Test-Path -LiteralPath $previousFile) {
+                    Remove-Item -LiteralPath $previousFile -Force
+                    $deletedFiles.Add($previousFileName) | Out-Null
+                }
+            }
+        }
     }
 
     if ($savedFiles.Count -eq 0) {
@@ -95,6 +111,7 @@ try {
         directory = $targetDir
         saved = $savedFiles.Count
         files = $savedFiles
+        deletedFiles = $deletedFiles
         server = [string]$payload.server
     }
 }

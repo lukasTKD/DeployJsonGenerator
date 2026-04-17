@@ -7,6 +7,7 @@ Wszystkie istotne zmiany w projekcie sa zapisywane tutaj.
 ### Fixed
 
 - build-level `waitfor` nie jest juz ograniczony do jednej zaleznosci; generator poprawnie importuje, utrzymuje i eksportuje wiele zaleznosci dla jednego builda
+- zmiana `filename` przy zapisie nadpisuje stan na serwerze zamiast zostawiac stary plik obok nowego
 
 ## [2026-03-15]
 
