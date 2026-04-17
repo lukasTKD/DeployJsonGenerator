@@ -123,6 +123,7 @@ Node na diagramie zawiera m.in.:
 
 - uzyj sekcji `Zaleznosci miedzy plikami JSON`,
 - zaznacz, ktore pliki maja wykonac sie wczesniej.
+- w JSON root-level `waitfor` jest zapisywany jako string dla jednej zaleznosci albo tablica dla wielu.
 
 ## 9. Specjalne buildy runnerow
 

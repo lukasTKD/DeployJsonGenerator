@@ -1802,7 +1802,7 @@ const App = (() => {
         if (waitforNames.length === 1) {
             json.waitfor = waitforNames[0];
         } else if (waitforNames.length > 1) {
-            json.waitfor = waitforNames.join(',');
+            json.waitfor = waitforNames;
         }
 
         // Optional root-level fields
@@ -2729,14 +2729,14 @@ const App = (() => {
                     flow.savedFilename = stripJsonExtension(flow.savedFilename || flow.filename || '');
                     if (Array.isArray(flow.interflowWaitfor)) {
                         flow.interflowWaitfor = flow.interflowWaitfor.filter(id => state.flows[id] && state.flows[id].server === flow.server);
-                    } else if (typeof flow.waitfor === 'string' && flow.waitfor.trim()) {
-                        const names = flow.waitfor.split(',').map(item => item.trim()).filter(Boolean);
-                        flow.interflowWaitfor = Object.values(state.flows)
-                            .filter(candidate => candidate.server === flow.server && candidate.id !== flow.id)
-                            .filter(candidate => names.includes(candidate.filename) || names.includes(candidate.filename + '.json'))
-                            .map(candidate => candidate.id);
                     } else {
-                        flow.interflowWaitfor = [];
+                        const names = parseDelimitedNames(flow.waitfor);
+                        flow.interflowWaitfor = names.length > 0
+                            ? Object.values(state.flows)
+                                .filter(candidate => candidate.server === flow.server && candidate.id !== flow.id)
+                                .filter(candidate => names.includes(candidate.filename) || names.includes(candidate.filename + '.json'))
+                                .map(candidate => candidate.id)
+                            : [];
                     }
 
                     delete flow.waitfor;
